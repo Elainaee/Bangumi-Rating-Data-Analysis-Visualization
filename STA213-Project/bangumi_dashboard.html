@@ -1,0 +1,3264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bangumi评分分析仪表板</title>
+    <!-- 引入Plotly库 -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Microsoft YaHei', 'Segoe UI', sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 0;
+            text-align: center;
+            margin-bottom: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+        
+        .subtitle {
+            font-size: 1.2em;
+            opacity: 0.9;
+            font-weight: 300;
+        }
+        
+        .dashboard {
+            display: flex;
+            gap: 30px;
+            position: relative;
+            overflow: hidden;
+            transition: gap 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        .section {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            position: relative;
+            flex: 1;
+            min-width: 0;
+            transition: flex 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94), 
+                       transform 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94), 
+                       opacity 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                       margin 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                       width 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            z-index: 10;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+        }
+
+        .section-title {
+            text-align: center;
+            width: 100%;
+        }
+
+        .info-box {
+            text-align: center;
+            width: 100%;
+        }
+
+        .dashboard-left-expanded .section:first-child {
+            flex: 5;
+            transform: none;
+        }
+
+        .dashboard-left-expanded .section:last-child {
+            flex: 0;
+            transform: translateX(100%);
+            opacity: 0;
+        }
+
+        .dashboard-right-expanded .section:first-child {
+            flex: 0;
+            transform: translateX(-100%);
+            opacity: 0;
+        }
+
+        .dashboard-right-expanded .section:last-child {
+            flex: 5;
+            transform: none;
+        }
+
+        .section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 30px;
+            z-index: 10;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px dashed transparent;
+        }
+
+        .section:first-child::before {
+            right: -15px;
+        }
+
+        .section:last-child::before {
+            left: -15px;
+        }
+
+        .section:first-child::before:hover {
+            background-color: rgba(102, 126, 234, 0.2);
+            border-color: rgba(102, 126, 234, 0.5);
+        }
+
+        .section:last-child::before:hover {
+            background-color: rgba(102, 126, 234, 0.2);
+            border-color: rgba(102, 126, 234, 0.5);
+        }
+
+        .dashboard-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.01);
+            z-index: 1;
+            display: none;
+            cursor: pointer;
+        }
+
+
+
+        .dashboard-overlay.active {
+            display: block;
+        }
+        
+        .section:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+        }
+        
+        .section-title {
+            font-size: 1.8em;
+            color: #667eea;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #f0f0f0;
+            padding-bottom: 10px;
+            font-weight: 400;
+        }
+        
+        .chart-container {
+            margin: 20px 0;
+            text-align: center;
+            width: 100%;
+        }
+        
+        .chart {
+            width: 100%;
+            height: 400px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin: 0 auto;
+        }
+        
+        .chart-title {
+            font-size: 1.2em;
+            margin-bottom: 15px;
+            color: #555;
+            font-weight: 500;
+        }
+        
+        .info-box {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #667eea;
+        }
+        
+        .info-title {
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .stat-number {
+            font-size: 2em;
+            font-weight: 300;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+        
+        .interactive-note {
+            background: #e3f2fd;
+            padding: 10px 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-size: 0.9em;
+            color: #1565c0;
+        }
+        
+        .update-time {
+            text-align: center;
+            margin-top: 30px;
+            color: #666;
+            font-size: 0.9em;
+        }
+        
+        .tab-container {
+            margin: 20px 0;
+        }
+        
+        .tab-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .tab-button {
+            padding: 10px 20px;
+            background: #f0f0f0;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        .tab-button.active {
+            background: #667eea;
+            color: white;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        /* 香农熵悬停提示样式 */
+        .shannon-entropy-tooltip {
+            color: #3b82f6;
+            cursor: help;
+            position: relative;
+            text-decoration: underline;
+            text-decoration-style: dotted;
+            text-underline-offset: 2px;
+        }
+        
+        .shannon-entropy-tooltip:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 5px;
+            font-size: 0.9em;
+            width: 300px;
+            text-align: left;
+            z-index: 1000;
+            white-space: normal;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            line-height: 1.5;
+        }
+        
+        .shannon-entropy-tooltip:hover::before {
+            content: '';
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 5px solid transparent;
+            border-top-color: #333;
+            margin-bottom: -5px;
+        }
+        
+        @media (max-width: 768px) {
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
+            
+            .shannon-entropy-tooltip:hover::after {
+                width: 250px;
+                font-size: 0.8em;
+            }
+        }
+        
+        /* 目录样式 */
+        .toc-container {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin: 20px 0;
+            border-left: 4px solid #667eea; 
+        }
+        
+        .toc-title {
+            font-size: 1.4em;
+            color: #667eea;
+            margin-bottom: 20px;
+            font-weight: 500;
+            text-align: center;
+        }
+        
+        .toc-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .toc-item {
+            margin-bottom: 8px;
+        }
+        
+        .toc-link {
+            display: block;
+            padding: 12px 15px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            text-decoration: none;
+            color: #333;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            border-left: 3px solid transparent;
+        }
+        
+        .toc-link:hover {
+            background: #e9ecef;
+            border-left-color: #667eea;  
+            transform: translateX(5px);
+        }
+        
+        .toc-link.active {
+            background: #667eea;
+            color: white;
+            border-left-color: #764ba2;
+        }
+        
+        .toc-submenu {
+            list-style: none;
+            padding: 0;
+            margin: 5px 0 0 20px;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+        
+        .toc-submenu.expanded {
+            max-height: 200px;
+        }
+        
+        .toc-subitem {
+            margin-bottom: 5px;
+        }
+        
+        .toc-sublink {
+            display: block;
+            padding: 8px 12px;
+            background: #f1f3f4;
+            border-radius: 4px;
+            text-decoration: none;
+            color: #555;
+            font-size: 0.9em;
+            transition: all 0.2s ease;
+            border-left: 2px solid transparent;
+        }
+        
+        .toc-sublink:hover {
+            background: #e3e5e7;
+            border-left-color: #667eea;
+            color: #333;
+        }
+        
+        .toc-sublink.active {
+            background: #667eea;
+            color: white;
+            border-left-color: #764ba2;
+        }
+        
+
+        
+        .toc-expandable {
+            cursor: pointer;
+            position: relative;
+        }
+        
+        .toc-expandable::after {
+            content: '▶';
+            position: absolute;
+            right: 15px;
+            transition: transform 0.3s ease;
+            font-size: 0.8em;
+        }
+        
+        .toc-expandable.expanded::after {
+            transform: rotate(90deg);
+        }
+
+        /* 搜索结果项悬停效果 */
+        .search-result-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border-radius: 4px;
+        }
+
+        .search-result-item:hover {
+            background-color: #f0f9ff;
+            transform: translateX(5px);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .search-result-item:last-child {
+            border-bottom: none;
+        }
+
+        /* 返回顶部按钮样式 */
+        .back-to-top-btn {
+            position: fixed;
+            bottom: 30px;
+            left: 30px;
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            font-size: 20px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+            transition: all 0.3s ease;
+            z-index: 1000;
+            display: none;
+            opacity: 0;
+            transform: translateY(20px);
+        }
+
+        .back-to-top-btn:hover {
+            transform: translateY(-5px) scale(1.1);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+            background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+        }
+
+        .back-to-top-btn:active {
+            transform: translateY(0) scale(0.95);
+        }
+
+        .back-to-top-btn.show {
+            display: block;
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* 移动端适配 */
+        @media (max-width: 768px) {
+            .back-to-top-btn {
+                bottom: 20px;
+                left: 20px;
+                width: 45px;
+                height: 45px;
+                font-size: 18px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .back-to-top-btn {
+                bottom: 15px;
+                left: 15px;
+                width: 40px;
+                height: 40px;
+                font-size: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎬 基于bangumi评分数据分析</h1>
+        </header>
+        
+        <div class="dashboard">
+            <!-- 左栏：深度分析内容 -->
+            <div class="section">
+                <h2 class="section-title">🎯 bangumi - 深度分析</h2>
+                
+                <!-- 目录 -->
+                <div class="toc-container">
+                    <div class="toc-title">📋 内容目录</div>
+                    <ul class="toc-list">
+                        <li class="toc-item">
+                            <a href="#dataset-details" class="toc-link">1. 数据集详情</a>
+                        </li>
+                        <li class="toc-item">
+                            <a href="#data-processing" class="toc-link">2. 数据处理</a>
+                        </li>
+                        <li class="toc-item">
+                            <div class="toc-link toc-expandable">3. 研究问题</div>
+                            <ul class="toc-submenu">
+                                <li class="toc-subitem">
+                                    <a href="#time-analysis" class="toc-sublink">3.1. 时间轴分析</a>
+                                </li>
+                                <li class="toc-subitem">
+                                    <a href="#rating-analysis" class="toc-sublink">3.2. 评分分布分析</a>
+                                </li>
+                                <li class="toc-subitem">
+                                    <a href="#studio-effect" class="toc-sublink">3.3. 厂牌效应</a>
+                                </li>
+                            </ul>
+                        </li>
+                        <li class="toc-item">
+                            <a href="#conclusion" class="toc-link">4. 结论汇总</a>
+                        </li>
+                    </ul>
+                </div>
+                
+                <!-- 数据集描述 -->
+                <div class="chart-container" id="dataset-details">
+                    <div class="chart-title">📊 数据集描述</div>
+                    <div class="info-box" style="background: #fff3cd; border-left: 4px solid #ffc107;">
+                        <div class="info-title">数据来源与字段说明</div>
+                        <p>数据集采用右侧内容中定期爬虫爬取的最新csv分析，包含以下字段：</p>
+                        <ul style="line-height: 1.8; margin-left: 20px;">
+                            <li><strong>subject_id</strong>：bangumi官网记录番剧数据的时间排序，从1开始</li>
+                            <li><strong>name_cn</strong>：番剧的中文名称</li>
+                            <li><strong>name</strong>：原名</li>
+                            <li><strong>score</strong>：评分（1~10）</li>
+                            <li><strong>total</strong>：总评价人数</li>
+                            <li><strong>year</strong>：开播时间</li>
+                            <li><strong>company</strong>：动漫制作公司</li>
+                            <li><strong>rate_i</strong>(从1到10)：打出i分的人数</li>
+                        </ul>
+                        <p><strong>数据说明：</strong>该数据中仅包含了bangumi网站中<strong>有评分的数据</strong>（大部分评分人数不足的番剧没有评分，没有记载其中）。基础排序按照<strong>score</strong>高低顺序，一共有<strong>8390</strong>组数据，<strong>year</strong>与<strong>company</strong>中有部分缺失值。</p>
+                    </div>
+                </div>
+                
+                <!-- 数据处理 -->
+                <div class="chart-container" id="data-processing">
+                    <div class="chart-title">🔧 数据处理流程</div>
+                    <div class="info-box" style="background: #fff0f7; border-left: 4px solid #e91e63;">
+                        <div class="info-title">数据处理方法</div>
+                        <p><strong>数据加载策略：</strong>自动查找最新的CSV文件（bangumi_anime_*.csv），按日期排序选择最新数据</p>
+                        <p><strong>数据类型处理：</strong>严格的数据类型转换规范</p>
+                        <ul style="line-height: 1.8; margin-left: 20px;">
+                            <li><strong>数值类型</strong>：subject_id(int64), score(float64), total(int64), rate_1~10(int64)</li>
+                            <li><strong>文本类型</strong>：name_cn(str), name(str), year(str), company(str)</li>
+                        </ul>
+                        <p><strong>缺失值处理：</strong>将空值、'NA'、'N/A'、'null'、'NULL'、'None'统一处理为'Unknown'</p>
+                        <p><strong>数据过滤：</strong>仅保留有评分的作品（score > 0）</p>
+                        <p><strong>争议度计算：</strong>基于评分分布计算<span class="shannon-entropy-tooltip" data-tooltip="Shannon Entropy（香农熵）由克劳德·香农（Claude Shannon）在1948年提出。它用于量化一个随机变量的不确定性或信息量。简单来说，熵越高，事件的不确定性越大，需要更多信息来描述它；熵越低，不确定性越小。 - 对于一个离散随机变量 X，其取值集合为 {x_1, x_2, ..., x_n}，每个值出现的概率分别为 p(x_1), p(x_2), ... , p(x_n)（满足总和为1），香农熵 H(X) 定义为每个概率乘上其对数的总和的相反数 - 以频率估计概率，我们就能得到动画的争议指数。">香农熵</span>（Shannon Entropy）作为争议指数</p>
+                        <p><strong>香农熵计算公式：</strong><br><img src='../resource/Shannon.png' alt='香农熵公式' style='max-width: 300px;'></p>
+                        
+                        <p><strong>权重评分计算：</strong>通过<span class="shannon-entropy-tooltip" data-tooltip="贝叶斯加权评分公式参数说明：\n• WR（Weighted Rating）：贝叶斯加权后的最终评分\n• v：该作品的投票总数（vote count，例如数据中的 `total`）\n• R：该作品的平均评分（raw average score，例如数据中的 `score`，通常是1-10分）\n• m：最小投票阈值（minimum votes required），一个超参数，用于控制"拉回"力度。通常取所有作品投票数的某个分位点（如中位数或平均值）\n• C：所有作品的整体平均评分（global mean score），即整个数据集的平均分">贝叶斯加权评分公式</span>对score进行加权处理。</p>
+                        <p><strong>贝叶斯加权评分公式：</strong><br><img src='../resource/Bayesian.png' alt='贝叶斯加权评分公式' style='max-width: 300px;'></p>
+                        
+                        <div class="interactive-note">
+                            💡 采用标准化的数据处理流程，确保分析结果的准确性和一致性
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 研究问题 -->
+                <div class="chart-container">
+                    <div class="chart-title">🔍 研究问题概览</div>
+                    <div class="info-box" style="background: #f0f9ff; border-left: 4px solid #3b82f6;">
+                        <div class="info-title">核心研究问题</div>
+                        <ul style="line-height: 1.8; margin-left: 20px;">
+                            <li><strong>时间轴分析</strong>：开播年份与评分的关系</li>
+                            <li><strong>"粉黑大战"</strong>：评分分布形态研究</li>
+                            <li><strong>厂牌效应</strong>：顶级动画公司稳定性分析</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <!-- 时间轴分析 -->
+                <div class="chart-container" id="time-analysis">
+                    <div class="chart-title">📅 时间轴分析</div>
+                    
+                    <!-- 研究目的描述 -->
+                    <div class="info-box" style="background: #f0f9ff; border-left: 4px solid #3b82f6; margin-bottom: 20px;">
+                        <div class="info-title">研究目的</div>
+                        <p><strong>探讨动画质量随时间的变化趋势，并验证是否存在"老番滤镜"或"现代通胀"现象。</strong></p>
+                        <p>通过分析开播年份与评分的关系，我们旨在回答以下问题：</p>
+                        <ul style="line-height: 1.8; margin-left: 20px;">
+                            <li>动画的整体质量是否随时间推移而下降？</li>
+                            <li>是否存在"老番滤镜"（对老作品的怀旧偏好）？</li>
+                            <li>是否存在"现代通胀"（对现代作品的评分虚高）？</li>
+                            <li>贝叶斯加权评分是否能更准确地反映真实质量趋势？</li>
+                        </ul>
+                        
+                        <div class="info-title" style="margin-top: 15px;">为什么选择Spearman相关系数？</div>
+                        <div style="text-align: center; margin: 15px 0;">
+                            <img src="../resource/Spearman.png" alt="Spearman相关系数示意图" style="max-width: 100%; height: auto; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+                            <p style="font-size: 12px; color: #666; margin-top: 5px;">Spearman秩相关系数示意图</p>
+                        </div>
+                        <p>在探究动画评分随时间变化的趋势时，我们采用了<strong>Spearman秩相关系数(ρ)</strong>而非传统的Pearson相关系数，原因如下：</p>
+                        <ul style="line-height: 1.8; margin-left: 20px;">
+                            <li><strong>非线性关系捕捉</strong>：Pearson相关系数要求变量之间存在线性关系，而动画评分随年份的变化可能呈现非线性趋势（如波动或阶梯式增长）。Spearman衡量的是单调性关系，更适合捕捉非线性但方向一致的变化。</li>
+                            <li><strong>对异常值稳健</strong>：动画数据中可能存在极端评分或异常值，Spearman基于数据的秩次（排名）而非原始数值进行计算，因此对异常值和分布偏态不敏感，更适合评分数据。</li>
+                            <li><strong>无需正态分布假设</strong>：Spearman不要求数据服从正态分布，更适合评分这种可能呈现偏态分布的数据。</li>
+                        </ul>
+                    </div>
+                    
+                    <div id="year-rating-scatter" class="chart"></div>
+                    <div class="info-box" style="background: #f0fdf4; border-left: 4px solid #10b981;">
+                        <div class="info-title">分析结论</div>
+                        <p><strong>Spearman ρ ≈ -0.28到-0.31</strong>：年份与评分存在显著负相关</p>
+                        <p><strong>幸存者偏差</strong>：1980年前只有经典作品被流传</p>
+                        <p><strong>贝叶斯评分</strong>比原始评分表现更平稳</p>
+                    </div>
+                </div>
+                
+                <!-- 粉黑大战分析 -->
+                <div class="chart-container" id="rating-analysis">
+                    <div class="chart-title">⚔️ 粉黑大战：争议度分析</div>
+                    
+                    <!-- 研究目的简介 -->
+                    <div class="info-box" style="background: #fef7ed; border-left: 4px solid #f59e0b; margin-bottom: 20px;">
+                        <h4>2. "粉黑大战"：争议度的深度解剖</h4>
+                        <p><strong>研究目的：</strong> 找出哪些番剧是真正的"口碑两极分化"，哪些是"全民公认"。</p>
+                    </div>
+                    
+                    <div class="tab-container">
+                        <div class="tab-buttons">
+                            <button class="tab-button active" onclick="switchTab('quadrant', event)">争议象限</button>
+                            <button class="tab-button" onclick="switchTab('top15', event)">排行榜</button>
+                            <button class="tab-button" onclick="switchTab('distribution', event)">分布对比</button>
+                        </div>
+                        
+                        <div class="tab-content active" id="quadrant-tab">
+                            <div id="controversy-quadrant" class="chart"></div>
+                        </div>
+                        
+                        <div class="tab-content" id="top15-tab">
+                            <div id="top15-controversy" class="chart"></div>
+                        </div>
+                        
+                        <div class="tab-content" id="distribution-tab">
+                            <div id="distribution-comparison" class="chart"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="info-box" style="background: #fef7ed; border-left: 4px solid #f59e0b;">
+                        <div class="info-title">关键发现</div>
+                        <p><strong>右下角区域几乎为空</strong>：很少有评分超过 8.5 且争议指数低于 1.0 的作品</p>
+                        <p><strong>向右下方倾斜趋势</strong>："吵得凶但维持超高分"的作品极少</p>
+                        <p><strong>高质量伴随争议</strong>：平庸导致共识，而卓越往往伴随着争议</p>
+                    </div>
+                </div>
+                
+                <!-- 厂牌效应分析 -->
+                <div class="chart-container" id="studio-effect">
+                    <div class="chart-title">🏭 厂牌效应分析</div>
+                    
+                    <!-- 研究目的简介 -->
+                    <div class="info-box" style="background: #f3e8ff; border-left: 4px solid #8b5cf6; margin-bottom: 20px;">
+                        <h4>3. 厂牌效应：动画公司的稳定性建模</h4>
+                        <p><strong>研究目的：</strong> 评估动画公司是"神作制造机"还是"质量过山车"。</p>
+                    </div>
+                    
+                    <div id="studio-bubble" class="chart"></div>
+                    
+                    <!-- 厂牌效应分析说明 -->
+                    <div class="info-box" style="background: #fff3e0; border-left: 4px solid #ff9800; margin: 20px 0;">
+                        <div class="info-title">分析思路</div>
+                        <p>将制作公司分为两组"Unknown"与"Known"，并制作小提琴图，看看"Unknown"的作品的熵值是否普遍更高？（因为缺乏厂牌印象，评价更随机）。</p>
+                    </div>
+                    
+                    <!-- Unknown vs Known 公司熵值分布对比 -->
+                    <div class="chart-container">
+                        <div class="chart-title">知名公司与不知名公司熵值分布对比</div>
+                        <div id="unknown-known-comparison" class="chart"></div>
+                        <div id="unknown-known-comparison-description"></div>
+                    </div>
+                    
+                    <!-- 京都动画对比分析说明 -->
+                    <div class="info-box" style="background: #fff3e0; border-left: 4px solid #ff9800; margin: 20px 0;">
+                        <div class="info-title">分析思路</div>
+                        <p>从提取"京都动画"的内容，并制作箱线图用于和不知名公司对比，分析知名厂牌与不知名厂牌在争议度分布上的差异。</p>
+                    </div>
+                    
+                    <div id="kyoto-unknown-comparison" class="chart"></div>
+                    <div class="info-box" style="background: #f3e8ff; border-left: 4px solid #8b5cf6;">
+                        <div class="info-title">厂牌效应结论</div>
+                        <p><strong>京都动画</strong>的箱线图比未知公司更紧凑，底部边缘明显更高</p>
+                        <p>京都动画的小提琴图在顶部有显著凸起，说明顶级厂牌更容易造成现象级争议</p>
+                        <p>尽管背景迥异，但中位数几乎完全重合，厂牌效应难以消除观众审美分歧</p>
+                    </div>
+                </div>
+                
+                <!-- 结论汇总 -->
+                <div class="chart-container" id="conclusion">
+                    <div class="chart-title">📋 结论汇总</div>
+                    <div class="info-box" style="background: #f0fdf4; border-left: 4px solid #10b981;">
+                        <div class="info-title">核心发现总结</div>
+                        <p><strong>时间轴分析</strong>：动画评分随年份呈现轻微下降趋势，贝叶斯加权评分比原始评分表现更平稳</p>
+                        <p><strong>争议度分析</strong>：右下角区域几乎为空，很少有评分超过 8.5 且争议指数低于 1.0 的作品，高质量作品往往伴随争议</p>
+                        <p><strong>厂牌效应</strong>：知名厂牌（如京都动画）的作品质量更稳定，但顶级厂牌更容易造成现象级争议</p>
+                        <p><strong>关键洞察</strong>：动画评价存在明显的幸存者偏差和审美分歧，厂牌效应难以完全消除观众的主观偏好</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 右栏：多周趋势分析 -->
+            <div class="section">
+                <h2 class="section-title">📊 多周趋势</h2>
+                <div class="info-box">
+                    <div class="info-title">多周趋势分析</div>
+                    <p>展示最近几周的评分变化趋势，基于定时爬取的多周数据。</p>
+                    <div class="interactive-note">
+                        💡 交互提示: 鼠标悬停查看作品评分变化，缩放和平移图表进行详细探索
+                    </div>
+                </div>
+                
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number" id="multi-weeks-count">--</div>
+                        <div class="stat-label">分析周数</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="multi-total-anime">--</div>
+                        <div class="stat-label">总作品数</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="multi-changing-anime">--</div>
+                        <div class="stat-label">评分变化作品</div>
+                    </div>
+                </div>
+                
+                <!-- 排行榜区域 -->
+                <div class="chart-container">
+                    <div class="chart-title">📈 评分变化排行榜</div>
+                    <div class="tab-container">
+                        <div class="tab-buttons">
+                            <button class="tab-button active" onclick="switchMultiWeekTab('increase', event)">评分增长率榜</button>
+                            <button class="tab-button" onclick="switchMultiWeekTab('decrease', event)">评分下降率榜</button>
+                            <button class="tab-button" onclick="switchMultiWeekTab('voters', event)">评分人数增长榜</button>
+                        </div>
+                        
+                        <div class="tab-content active" id="increase-tab">
+                            <div id="score-increase-ranking" class="chart">
+                                <div class="loading">正在加载评分增长率榜...</div>
+                            </div>
+                        </div>
+                        
+                        <div class="tab-content" id="decrease-tab">
+                            <div id="score-decrease-ranking" class="chart">
+                                <div class="loading">正在加载评分下降率榜...</div>
+                            </div>
+                        </div>
+                        
+                        <div class="tab-content" id="voters-tab">
+                            <div id="voters-increase-ranking" class="chart">
+                                <div class="loading">正在加载评分人数增长榜...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 作品ID搜索和趋势可视化 -->
+                <div class="chart-container">
+                    <div class="chart-title">🔍 单个作品多周趋势分析</div>
+                    
+                    <!-- 搜索界面 -->
+                    <div class="search-container" style="margin-bottom: 20px;">
+                        <div class="info-box" style="background: #f0f9ff; border-left: 4px solid #3b82f6;">
+                            <div class="info-title">作品搜索</div>
+                            
+                            <!-- 搜索类型选择 -->
+                            <div style="margin-bottom: 15px;">
+                                <label style="margin-right: 15px;">
+                                    <input type="radio" name="search-type" value="id" checked> 按作品ID搜索
+                                </label>
+                                <label>
+                                    <input type="radio" name="search-type" value="name"> 按作品名称搜索
+                                </label>
+                            </div>
+                            
+                            <!-- 搜索输入区域 -->
+                            <div style="display: flex; gap: 10px; align-items: center;">
+                                <input type="text" id="anime-search-input" placeholder="输入作品ID (如: 12345)" 
+                                       style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+                                <button id="search-anime-btn" style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                                    搜索作品
+                                </button>
+                            </div>
+                            
+                            <!-- 搜索结果列表 -->
+                            <div id="search-results" style="margin-top: 15px; display: none;">
+                                <div class="info-title">搜索结果</div>
+                                <div id="search-results-list" style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 5px; padding: 10px;"></div>
+                            </div>
+                            
+                            <p style="margin-top: 10px; font-size: 0.9em; color: #666;">
+                                提示：可以在Bangumi网站的作品页面URL中找到作品ID，或直接输入作品名称进行模糊搜索
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <!-- 趋势可视化区域 -->
+                    <div id="anime-3d-trend" class="chart" style="height: 900px;">
+                        <div class="loading">请搜索作品查看多周趋势分析</div>
+                    </div>
+                    
+                    <!-- 作品信息显示 -->
+                    <div id="anime-info" class="info-box" style="background: #f0fdf4; border-left: 4px solid #10b981; display: none;">
+                        <div class="info-title">作品信息</div>
+                        <div id="anime-details"></div>
+                    </div>
+                </div>
+                
+                <div class="info-box">
+                    <div class="info-title">多周趋势分析说明</div>
+                    <p>基于最近7周的Bangumi数据，分析动画评分的动态变化趋势。</p>
+                    <p><strong>评分增长率榜</strong>：展示评分增长最快的作品</p>
+                    <p><strong>评分下降率榜</strong>：展示评分下降最明显的作品</p>
+                    <p><strong>评分人数增长榜</strong>：展示评分人数增长最快的作品</p>
+                    <p><strong>多周趋势分析</strong>：搜索作品可查看该作品的详细趋势分析，包含：</p>
+                    <ul style="margin-left: 20px; line-height: 1.6;">
+                        <li><strong>评分变化趋势</strong>：作品评分随时间的变化</li>
+                        <li><strong>评分人数变化</strong>：评分人数随时间的变化</li>
+                        <li><strong>3D可视化</strong>：时间、评分、评分人数的三维关系展示</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <div class="update-time">
+            最后更新时间: <span id="last-update">--</span>
+        </div>
+    </div>
+
+    <!-- 返回顶部按钮 -->
+    <button id="back-to-top" class="back-to-top-btn" title="返回顶部">
+        ▲
+    </button>
+
+    <script>
+        // 更新时间显示
+        document.getElementById('last-update').textContent = new Date().toLocaleString('zh-CN');
+        
+        // 仪表板状态管理
+        let dashboardState = 'normal'; // normal, left-expanded, right-expanded
+        
+        // 全局数据变量
+        let bangumiData = null;
+        let processedData = null;
+        
+        // 加载Bangumi数据（与Python代码保持一致）
+        async function loadBangumiData() {
+            try {
+                console.log('🚀 开始加载单周Bangumi数据...');
+                
+                // 自动查找最新的CSV文件
+                const csvFiles = await findLatestCSVFile();
+                if (!csvFiles.latestFile) {
+                    console.error('❌ 未找到有效的CSV文件');
+                    throw new Error('未找到有效的CSV文件');
+                }
+                
+                console.log(`✅ 使用最新CSV文件: ${csvFiles.latestFile} (日期: ${csvFiles.latestDate})`);
+                
+                // 测试文件是否存在
+                console.log(`🔍 测试文件可访问性: ${csvFiles.latestFile}`);
+                try {
+                    const testResponse = await fetch(csvFiles.latestFile, { method: 'HEAD' });
+                    if (!testResponse.ok) {
+                        console.error(`❌ 文件访问测试失败，状态码: ${testResponse.status}`);
+                        throw new Error(`文件不存在或无法访问: ${csvFiles.latestFile}, 状态码: ${testResponse.status}`);
+                    }
+                    console.log('✅ 文件存在且可访问');
+                } catch (testError) {
+                    console.error('❌ 文件访问测试失败:', testError);
+                    throw new Error(`无法访问文件 ${csvFiles.latestFile}: ${testError.message}`);
+                }
+                
+                console.log(`📥 开始下载CSV文件内容...`);
+                const response = await fetch(csvFiles.latestFile);
+                if (!response.ok) {
+                    console.error(`❌ HTTP错误! 状态码: ${response.status}`);
+                    throw new Error(`HTTP错误! 状态码: ${response.status}`);
+                }
+                const csvText = await response.text();
+                console.log(`✅ CSV文件下载完成，内容长度: ${csvText.length} 字符`);
+                
+                // 解析CSV数据
+                console.log('🔍 开始解析CSV数据...');
+                bangumiData = parseCSV(csvText);
+                console.log(`✅ CSV解析完成，原始数据量: ${bangumiData.length} 条记录`);
+                
+                // 处理数据（与Python代码保持一致）
+                console.log('⚙️ 开始处理数据...');
+                processedData = processData(bangumiData);
+                
+                console.log(`✅ 数据加载成功: ${processedData.length} 条记录`);
+                return true;
+            } catch (error) {
+                console.error('❌ 数据加载失败:', error);
+                const errorMessage = `数据加载失败: ${error.message}\n\n请确保:\n1. CSV文件存在于/bangumi_data文件夹中\n2. 文件格式正确\n3. 使用HTTP服务器访问（而非直接打开HTML文件）`;
+                alert(errorMessage);
+                return false;
+            }
+        }
+        
+        // 集中的CSV文件列表配置
+        const CSV_FILE_LIST = [
+            './bangumi_data/bangumi_anime_2025-12-17.csv',
+            './bangumi_data/bangumi_anime_2025-12-24.csv'
+        ];
+        
+        // 调试日志：显示CSV文件路径配置
+        console.log('🔧 CSV文件路径配置检查:');
+        console.log('📁 当前工作目录相对路径:', window.location.pathname);
+        console.log('📋 CSV_FILE_LIST配置:', CSV_FILE_LIST);
+        console.log('📍 预期文件位置: MyCode/bangumi_data/ 目录下');
+        console.log('🔍 完整URL路径测试:');
+        CSV_FILE_LIST.forEach(file => {
+            console.log(`  ${file} -> ${new URL(file, window.location.href).href}`);
+        });
+
+        // 查找最新的CSV文件（与Python代码保持一致）
+        async function findLatestCSVFile() {
+            try {
+                console.log('🔍 开始查找CSV文件...');
+                console.log('📁 CSV文件列表:', CSV_FILE_LIST);
+                
+                // 使用集中的CSV文件列表
+                const csvFiles = CSV_FILE_LIST;
+                
+                let latestFile = null;
+                let latestDate = null;
+                
+                for (const csvFile of csvFiles) {
+                    console.log(`📄 检查文件: ${csvFile}`);
+                    
+                    // 从文件名中提取日期（格式：bangumi_anime_YYYY-MM-DD.csv）
+                    const filename = csvFile.split('/').pop();
+                    const dateStr = filename.replace('bangumi_anime_', '').replace('.csv', '');
+                    
+                    try {
+                        // 解析日期
+                        const [year, month, day] = dateStr.split('-').map(Number);
+                        const fileDate = new Date(year, month - 1, day);
+                        
+                        console.log(`📅 文件日期: ${dateStr}, 解析结果: ${fileDate}`);
+                        
+                        if (!latestDate || fileDate > latestDate) {
+                            latestDate = fileDate;
+                            latestFile = csvFile;
+                            console.log(`✅ 更新最新文件为: ${csvFile}`);
+                        }
+                    } catch (e) {
+                        console.warn(`⚠️ 跳过无效日期格式的文件: ${filename}`);
+                        continue;
+                    }
+                }
+                
+                if (!latestFile) {
+                    console.error('❌ 未找到有效的CSV文件');
+                    throw new Error('未找到有效的CSV文件');
+                }
+                
+                console.log(`✅ 找到最新文件: ${latestFile}, 日期: ${latestDate.toISOString().split('T')[0]}`);
+                return {
+                    latestFile: latestFile,
+                    latestDate: latestDate.toISOString().split('T')[0]
+                };
+            } catch (error) {
+                console.error('❌ 查找CSV文件失败:', error);
+                throw error;
+            }
+        }
+        
+  
+        
+        // 解析CSV数据
+        function parseCSV(csvText) {
+            const lines = csvText.split('\n');
+            const headers = lines[0].split(',');
+            const data = [];
+            
+            for (let i = 1; i < lines.length; i++) {
+                if (lines[i].trim() === '') continue;
+                
+                const values = parseCSVLine(lines[i]);
+                if (values.length === headers.length) {
+                    const row = {};
+                    headers.forEach((header, index) => {
+                        row[header] = values[index];
+                    });
+                    data.push(row);
+                }
+            }
+            
+            return data;
+        }
+        
+        // 解析CSV行，处理引号和逗号
+        function parseCSVLine(line) {
+            const values = [];
+            let current = '';
+            let inQuotes = false;
+            
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    values.push(current);
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            
+            values.push(current);
+            return values;
+        }
+        
+        // 处理数据（与Python代码保持一致）
+        function processData(data) {
+            console.log('开始处理数据，原始数据量:', data.length);
+            
+            const processed = data.map(item => {
+                // 处理缺失值 - 与Python代码保持一致
+                
+                // Year: 先尝试转换为数值，转换失败的使用'coerce'模式，然后填充为'Unknown'
+                let year = item.year;
+                if (year === '' || year === 'NA' || year === 'N/A' || 
+                    year === 'null' || year === 'NULL' || year === 'None' || 
+                    year === null || year === undefined) {
+                    year = 'Unknown';
+                } else {
+                    // 尝试转换为数值（类似pd.to_numeric的coerce模式）
+                    const numericYear = parseFloat(year);
+                    year = isNaN(numericYear) ? 'Unknown' : numericYear;
+                }
+                
+                // Company: 直接填充缺失值为'Unknown'
+                let company = item.company;
+                if (company === '' || company === 'NA' || company === 'N/A' || 
+                    company === 'null' || company === 'NULL' || company === 'None' || 
+                    company === null || company === undefined) {
+                    company = 'Unknown';
+                }
+                
+                // 转换数值类型
+                const score = parseFloat(item.score) || 0;
+                const total = parseInt(item.total) || 0;
+                
+                // 计算争议度分数（香农熵）
+                const rates = [];
+                for (let i = 1; i <= 10; i++) {
+                    rates.push(parseInt(item[`rate_${i}`]) || 0);
+                }
+                
+                const totalRates = rates.reduce((sum, rate) => sum + rate, 0);
+                let controversyScore = 0;
+                
+                if (totalRates > 0) {
+                    for (let i = 0; i < rates.length; i++) {
+                        const p = rates[i] / totalRates;
+                        if (p > 0) {
+                            controversyScore -= p * Math.log(p);
+                        }
+                    }
+                }
+                
+                return {
+                    subject_id: parseInt(item.subject_id) || 0,
+                    name_cn: item.name_cn || '',
+                    name: item.name || '',
+                    score: score,
+                    total: total,
+                    year: year,
+                    company: company,
+                    rates: rates,
+                    controversy_score: controversyScore
+                };
+            });
+            
+            // 过滤掉没有评分的作品
+            const filteredData = processed.filter(item => item.score > 0);
+            
+            // 统计缺失值处理情况
+            const missingYears = processed.filter(item => item.year === 'Unknown').length;
+            const missingCompanies = processed.filter(item => item.company === 'Unknown').length;
+            
+            console.log(`缺失值处理完成:`);
+            console.log(`  - Year: 填充了 ${missingYears} 个缺失值为 'Unknown'`);
+            console.log(`  - Company: 填充了 ${missingCompanies} 个缺失值为 'Unknown'`);
+            
+            // 计算贝叶斯加权评分参数
+            const scores = filteredData.map(item => item.score);
+            const totals = filteredData.map(item => item.total);
+            
+            // 计算全局平均分（prior belief）
+            const global_mean_score = scores.reduce((sum, score) => sum + score, 0) / scores.length;
+            
+            // 设置置信阈值（使用总投票数的75%分位数）
+            const sortedTotals = [...totals].sort((a, b) => a - b);
+            const confidence_threshold = sortedTotals[Math.floor(sortedTotals.length * 0.75)];
+            
+            console.log(`贝叶斯加权评分参数:`);
+            console.log(`  - 全局平均分（先验）: ${global_mean_score.toFixed(2)}`);
+            console.log(`  - 置信阈值（C）: ${confidence_threshold.toFixed(0)} 票`);
+            
+            // 为每个数据项计算贝叶斯加权分数
+            const dataWithBayesianScore = filteredData.map(item => {
+                const bayesian_score = (
+                    (confidence_threshold * global_mean_score + item.total * item.score) / 
+                    (confidence_threshold + item.total)
+                );
+                
+                return {
+                    ...item,
+                    bayesian_score: bayesian_score
+                };
+            });
+            
+            // 计算贝叶斯加权评分的统计信息
+            const bayesianScores = dataWithBayesianScore.map(item => item.bayesian_score);
+            const minBayesianScore = Math.min(...bayesianScores);
+            const maxBayesianScore = Math.max(...bayesianScores);
+            const meanBayesianScore = bayesianScores.reduce((sum, score) => sum + score, 0) / bayesianScores.length;
+            const stdBayesianScore = Math.sqrt(bayesianScores.reduce((sum, score) => sum + Math.pow(score - meanBayesianScore, 2), 0) / bayesianScores.length);
+            
+            console.log(`贝叶斯加权评分统计:`);
+            console.log(`  - 范围: ${minBayesianScore.toFixed(2)} - ${maxBayesianScore.toFixed(2)}`);
+            console.log(`  - 均值: ${meanBayesianScore.toFixed(2)}, 标准差: ${stdBayesianScore.toFixed(2)}`);
+            console.log(`最终有效数据量: ${dataWithBayesianScore.length} 条记录`);
+            
+            return dataWithBayesianScore;
+        }
+        
+        // 初始化仪表板交互功能
+        function initDashboardInteractions() {
+            const dashboard = document.querySelector('.dashboard');
+            const leftSection = document.querySelector('.section:first-child');
+            const rightSection = document.querySelector('.section:last-child');
+            const overlay = document.createElement('div');
+            overlay.className = 'dashboard-overlay';
+            document.body.appendChild(overlay);
+            
+            // 左侧边框点击事件
+            leftSection.addEventListener('click', function(e) {
+                // 检查是否点击了右侧边框区域（宽度30px，位置right: -15px）
+                const rect = this.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                
+                // 检测右侧边框区域（从宽度-15px到宽度+15px）
+                if (clickX > rect.width - 15 && clickX < rect.width + 15 && dashboardState !== 'left-expanded') {
+                    expandLeftSection();
+                    e.stopPropagation();
+                } else {
+                    // 点击section内容时阻止事件冒泡
+                    e.stopPropagation();
+                }
+            });
+            
+            // 右侧边框点击事件
+            rightSection.addEventListener('click', function(e) {
+                // 检查是否点击了左侧边框区域（宽度30px，位置left: -15px）
+                const rect = this.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                
+                // 检测左侧边框区域（从-15px到15px）
+                if (clickX > -15 && clickX < 15 && dashboardState !== 'right-expanded') {
+                    expandRightSection();
+                    e.stopPropagation();
+                } else {
+                    // 点击section内容时阻止事件冒泡
+                    e.stopPropagation();
+                }
+            });
+            
+            // 覆盖层点击事件（恢复初始状态）
+            overlay.addEventListener('click', function() {
+                resetDashboard();
+            });
+            
+            // 仪表板点击事件（防止事件冒泡到覆盖层）
+            dashboard.addEventListener('click', function(e) {
+                e.stopPropagation();
+            });
+            
+            // 为每个section添加点击事件，阻止内容点击冒泡
+            document.querySelectorAll('.section').forEach(section => {
+                section.addEventListener('click', function(e) {
+                    // 阻止section内容点击事件冒泡到覆盖层
+                    e.stopPropagation();
+                });
+            });
+        }
+        
+        // 扩展左侧内容
+        function expandLeftSection() {
+            const dashboard = document.querySelector('.dashboard');
+            const overlay = document.querySelector('.dashboard-overlay');
+            
+            dashboard.classList.remove('dashboard-right-expanded');
+            dashboard.classList.add('dashboard-left-expanded');
+            overlay.classList.add('active');
+            dashboardState = 'left-expanded';
+        }
+        
+        // 扩展右侧内容
+        function expandRightSection() {
+            const dashboard = document.querySelector('.dashboard');
+            const overlay = document.querySelector('.dashboard-overlay');
+            
+            dashboard.classList.remove('dashboard-left-expanded');
+            dashboard.classList.add('dashboard-right-expanded');
+            overlay.classList.add('active');
+            dashboardState = 'right-expanded';
+        }
+        
+        // 恢复初始状态
+        function resetDashboard() {
+            const dashboard = document.querySelector('.dashboard');
+            const overlay = document.querySelector('.dashboard-overlay');
+            
+            dashboard.classList.remove('dashboard-left-expanded', 'dashboard-right-expanded');
+            overlay.classList.remove('active');
+            dashboardState = 'normal';
+        }
+        
+        // 标签切换功能
+        function switchTab(tabName, event) {
+            // 隐藏所有标签内容
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // 移除所有按钮激活状态
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.classList.remove('active');
+            });
+            
+            // 显示选中的标签内容
+            document.getElementById(tabName + '-tab').classList.add('active');
+            
+            // 激活选中的按钮
+            event.target.classList.add('active');
+        }
+        
+        // 创建深度分析图表
+        function createDeepAnalysisCharts() {
+            createYearRatingScatter();
+            createControversyQuadrant();
+            createTop15Controversy();
+            createDistributionComparison();
+            createStudioBubble();
+            createUnknownKnownComparison();
+            createKyotoUnknownComparison();
+        }
+        
+        // 年份与评分散点图（使用真实数据）
+        function createYearRatingScatter() {
+            if (!processedData) return;
+            
+            // 过滤有效年份数据（移除年份下限限制）
+            const validData = processedData.filter(item => 
+                item.year !== 'Unknown' && !isNaN(item.year)
+            );
+            
+            // 提取年份和评分数据
+            const years = validData.map(item => parseFloat(item.year));
+            const scores = validData.map(item => item.score);
+            const bayesianScores = validData.map(item => item.bayesian_score);
+            
+            // 计算Spearman相关系数
+            const spearmanResultScore = calculateSpearman(years, scores);
+            const spearmanResultBayes = calculateSpearman(years, bayesianScores);
+            
+            // 计算LOWESS趋势线
+            const lowessDataScore = calculateLowess(years, scores);
+            const lowessDataBayes = calculateLowess(years, bayesianScores);
+            
+            // 创建原始评分散点图轨迹
+            const scatterTraceScore = {
+                x: years,
+                y: scores,
+                mode: 'markers',
+                type: 'scatter',
+                name: 'Score',
+                marker: {
+                    size: 15,
+                    opacity: 0.25,
+                    color: '#1f77b4' // 蓝色
+                }
+            };
+            
+            // 创建贝叶斯评分散点图轨迹
+            const scatterTraceBayes = {
+                x: years,
+                y: bayesianScores,
+                mode: 'markers',
+                type: 'scatter',
+                name: 'Bayesian Score',
+                marker: {
+                    size: 15,
+                    opacity: 0.25,
+                    color: '#2ca02c' // 绿色
+                }
+            };
+            
+            // 原始评分LOWESS趋势线
+            const lowessTraceScore = {
+                x: lowessDataScore.map(d => d.x),
+                y: lowessDataScore.map(d => d.y),
+                mode: 'lines',
+                type: 'scatter',
+                name: 'LOWESS (Score)',
+                line: {
+                    color: 'black', // 黑色
+                    width: 2
+                }
+            };
+            
+            // 贝叶斯评分LOWESS趋势线
+            const lowessTraceBayes = {
+                x: lowessDataBayes.map(d => d.x),
+                y: lowessDataBayes.map(d => d.y),
+                mode: 'lines',
+                type: 'scatter',
+                name: 'LOWESS (Bayesian Score)',
+                line: {
+                    color: 'red', // 红色
+                    width: 2,
+                    dash: 'dash'
+                }
+            };
+            
+            // 设置固定坐标轴范围
+            const currentYear = new Date().getFullYear();
+            const layout = {
+                title: 'Year vs Rating with LOWESS Trend',
+                xaxis: {
+                    title: 'Year',
+                    range: [1900, currentYear + 1]  // 显示1900年到现在所有年份
+                },
+                yaxis: {
+                    title: 'Rating',
+                    range: [1, 10]  // 显示完整的1-10分评分范围
+                },
+                showlegend: true,
+                annotations: [
+                    {
+                        x: 0.02,
+                        y: 0.95,
+                        xref: 'paper',
+                        yref: 'paper',
+                        text: `Score: Spearman ρ = ${spearmanResultScore.rho.toFixed(3)}, p = ${spearmanResultScore.p.toExponential(3)}<br>Bayesian: Spearman ρ = ${spearmanResultBayes.rho.toFixed(3)}, p = ${spearmanResultBayes.p.toExponential(3)}`,
+                        showarrow: false,
+                        bgcolor: 'rgba(255,255,255,0.8)',
+                        bordercolor: 'rgba(0,0,0,0.2)',
+                        borderwidth: 1,
+                        font: {size: 12},
+                        align: 'left',
+                        valign: 'top'
+                    }
+                ],
+                margin: {t: 80, r: 40, b: 60, l: 60}
+            };
+            
+            Plotly.newPlot('year-rating-scatter', 
+                [scatterTraceScore, scatterTraceBayes, lowessTraceScore, lowessTraceBayes], 
+                layout
+            );
+            
+            // 更新分析结论
+            updateYearRatingAnalysis(spearmanResultScore.rho, spearmanResultScore.p, spearmanResultBayes.rho, spearmanResultBayes.p);
+        }
+        
+        // 计算LOWESS趋势线
+        function calculateLowess(x, y, frac = 0.3) {
+            // 将数据按x排序
+            const combined = x.map((xi, i) => ({x: xi, y: y[i]}));
+            combined.sort((a, b) => a.x - b.x);
+            
+            const sortedX = combined.map(d => d.x);
+            const sortedY = combined.map(d => d.y);
+            
+            const result = [];
+            const n = sortedX.length;
+            const windowSize = Math.max(3, Math.floor(n * frac));
+            
+            for (let i = 0; i < n; i++) {
+                const currentX = sortedX[i];
+                
+                // 计算权重（基于距离）
+                const distances = sortedX.map(xj => Math.abs(xj - currentX));
+                const maxDistance = Math.max(...distances);
+                const weights = distances.map(d => {
+                    const normalized = d / maxDistance;
+                    return Math.pow(1 - Math.pow(normalized, 3), 3);
+                });
+                
+                // 加权线性回归
+                let sumW = 0, sumWX = 0, sumWY = 0, sumWX2 = 0, sumWXY = 0;
+                
+                for (let j = 0; j < n; j++) {
+                    const w = weights[j];
+                    sumW += w;
+                    sumWX += w * sortedX[j];
+                    sumWY += w * sortedY[j];
+                    sumWX2 += w * sortedX[j] * sortedX[j];
+                    sumWXY += w * sortedX[j] * sortedY[j];
+                }
+                
+                const denominator = sumW * sumWX2 - sumWX * sumWX;
+                if (denominator !== 0) {
+                    const slope = (sumW * sumWXY - sumWX * sumWY) / denominator;
+                    const intercept = (sumWY - slope * sumWX) / sumW;
+                    result.push({x: currentX, y: slope * currentX + intercept});
+                } else {
+                    result.push({x: currentX, y: sortedY[i]});
+                }
+            }
+            
+            return result;
+        }
+        
+        // 更新年份评分分析结论
+        function updateYearRatingAnalysis(rhoScore, pScore, rhoBayes, pBayes) {
+            const analysisBox = document.querySelector('#year-rating-scatter').nextElementSibling;
+            if (analysisBox && analysisBox.classList.contains('info-box')) {
+                const conclusion = analysisBox.querySelector('.info-title').nextElementSibling;
+                if (conclusion) {
+                    conclusion.innerHTML = `
+                        <p><strong>Score: Spearman ρ = ${rhoScore.toFixed(3)}, p = ${pScore.toExponential(3)}</strong></p>
+                        <p><strong>Bayesian: Spearman ρ = ${rhoBayes.toFixed(3)}, p = ${pBayes.toExponential(3)}</strong></p>
+                        <p><strong>Data size:</strong> ${processedData.filter(item => item.year !== 'Unknown' && !isNaN(item.year)).length} works with valid year information</p>
+                    `;
+                }
+            }
+        }
+        
+        // 争议象限图（使用真实数据）
+        function createControversyQuadrant() {
+            if (!processedData) return;
+            
+            // 过滤有效数据（有评分和争议度）
+            const validData = processedData.filter(item => 
+                item.score > 0 && item.controversy_score > 0
+            );
+            
+            // 限制数据量以提高性能
+            const sampledData = validData.length > 1000 ? 
+                validData.filter((_, i) => i % Math.ceil(validData.length / 1000) === 0) : 
+                validData;
+            
+            const trace = {
+                x: sampledData.map(d => d.score),
+                y: sampledData.map(d => d.controversy_score),
+                mode: 'markers',
+                type: 'scatter',
+                text: sampledData.map(d => d.name_cn || d.name),
+                hoverinfo: 'text+x+y',
+                marker: {
+                    size: 6,
+                    opacity: 0.5,
+                    color: sampledData.map(d => d.controversy_score),
+                    colorscale: 'Viridis',
+                    showscale: true,
+                    colorbar: {
+                        title: '争议指数'
+                    }
+                }
+            };
+            
+            // 计算四分位数用于划分区域
+            const scores = sampledData.map(d => d.score);
+            const controversies = sampledData.map(d => d.controversy_score);
+            
+            const scoreQ3 = quantile(scores, 0.75); // 高评分阈值
+            const controversyQ2 = quantile(controversies, 0.5); // 中等争议阈值
+            
+            const layout = {
+                title: '评分 vs 争议度象限图',
+                xaxis: {title: '评分', range: [Math.min(...scores) - 0.5, Math.max(...scores) + 0.5]},
+                yaxis: {title: '争议指数 (Shannon Entropy)', range: [0, Math.max(...controversies) + 0.5]},
+                shapes: [
+                    // 高评分低争议（杰作区）
+                    {
+                        type: 'rect',
+                        x0: scoreQ3, x1: Math.max(...scores) + 0.5,
+                        y0: 0, y1: controversyQ2,
+                        fillcolor: 'rgba(76, 175, 80, 0.1)',
+                        line: {color: 'green', width: 1}
+                    },
+                    // 高评分高争议（争议杰作区）
+                    {
+                        type: 'rect',
+                        x0: scoreQ3, x1: Math.max(...scores) + 0.5,
+                        y0: controversyQ2, y1: Math.max(...controversies) + 0.5,
+                        fillcolor: 'rgba(255, 152, 0, 0.1)',
+                        line: {color: 'orange', width: 1}
+                    },
+                    // 低评分高争议（争议烂作区）
+                    {
+                        type: 'rect',
+                        x0: Math.min(...scores) - 0.5, x1: scoreQ3,
+                        y0: controversyQ2, y1: Math.max(...controversies) + 0.5,
+                        fillcolor: 'rgba(244, 67, 54, 0.1)',
+                        line: {color: 'red', width: 1}
+                    }
+                ],
+                annotations: [
+                    {
+                        x: (scoreQ3 + Math.max(...scores)) / 2,
+                        y: controversyQ2 / 2,
+                        text: '共识杰作区',
+                        showarrow: false,
+                        bgcolor: 'rgba(255,255,255,0.8)',
+                        font: {size: 12}
+                    },
+                    {
+                        x: (scoreQ3 + Math.max(...scores)) / 2,
+                        y: (controversyQ2 + Math.max(...controversies)) / 2,
+                        text: '争议杰作区',
+                        showarrow: false,
+                        bgcolor: 'rgba(255,255,255,0.8)',
+                        font: {size: 12}
+                    },
+                    {
+                        x: (Math.min(...scores) + scoreQ3) / 2,
+                        y: (controversyQ2 + Math.max(...controversies)) / 2,
+                        text: '争议烂作区',
+                        showarrow: false,
+                        bgcolor: 'rgba(255,255,255,0.8)',
+                        font: {size: 12}
+                    }
+                ]
+            };
+            
+            Plotly.newPlot('controversy-quadrant', [trace], layout);
+            
+            // 更新争议分析结论
+            updateControversyAnalysis(sampledData, scoreQ3, controversyQ2);
+        }
+        
+        // 计算分位数
+        function quantile(arr, q) {
+            const sorted = [...arr].sort((a, b) => a - b);
+            const pos = (sorted.length - 1) * q;
+            const base = Math.floor(pos);
+            const rest = pos - base;
+            
+            if (sorted[base + 1] !== undefined) {
+                return sorted[base] + rest * (sorted[base + 1] - sorted[base]);
+            } else {
+                return sorted[base];
+            }
+        }
+        
+        // 更新争议分析结论
+        function updateControversyAnalysis(data, scoreQ3, controversyQ2) {
+            const analysisBox = document.querySelector('#controversy-quadrant').closest('.chart-container').nextElementSibling;
+            if (analysisBox && analysisBox.classList.contains('info-box')) {
+                const conclusion = analysisBox.querySelector('.info-title').nextElementSibling;
+                if (conclusion) {
+                    // 统计各区域作品数量
+                    const masterpiece = data.filter(d => d.score >= scoreQ3 && d.controversy_score < controversyQ2).length;
+                    const controversialMasterpiece = data.filter(d => d.score >= scoreQ3 && d.controversy_score >= controversyQ2).length;
+                    const controversialBad = data.filter(d => d.score < scoreQ3 && d.controversy_score >= controversyQ2).length;
+                    
+                    conclusion.innerHTML = `
+                        <p><strong>共识杰作区 (${masterpiece}部)</strong>：高质量与高度共识并存的作品</p>
+                        <p><strong>争议杰作区 (${controversialMasterpiece}部)</strong>：高质量但伴随争议的作品</p>
+                        <p><strong>争议烂作区 (${controversialBad}部)</strong>：低质量且争议较大的作品</p>
+                        <p><strong>关键发现</strong>：右下角区域作品数量相对较少，说明很少有评分超过 8.5 且争议指数低于 1.0 的作品</p>
+                    `;
+                }
+            }
+        }
+        
+        // 争议度前15排行榜（使用真实数据）
+        function createTop15Controversy() {
+            if (!processedData) return;
+            
+            // 过滤有效数据（有评分和争议度）
+            const validData = processedData.filter(item => 
+                item.score > 0 && item.controversy_score > 0
+            );
+            
+            // 按争议度排序，取前15名
+            const top15 = [...validData]
+                .sort((a, b) => b.controversy_score - a.controversy_score)
+                .slice(0, 15);
+            
+            const animeNames = top15.map(d => d.name_cn || d.name);
+            const controversyScores = top15.map(d => d.controversy_score);
+            const ratings = top15.map(d => d.score);
+            
+            const trace = {
+                x: controversyScores,
+                y: animeNames,
+                type: 'bar',
+                orientation: 'h',
+                text: top15.map(d => `评分: ${d.score.toFixed(2)}`),
+                textposition: 'auto',
+                marker: {
+                    color: ratings,
+                    colorscale: 'Reds',
+                    showscale: true,
+                    colorbar: {
+                        title: '评分'
+                    }
+                }
+            };
+            
+            const layout = {
+                title: '争议度前15作品排行榜',
+                xaxis: {title: '争议指数 (Shannon Entropy)'},
+                yaxis: {title: '作品名称', autorange: 'reversed'},
+                margin: {l: 200} // 增加左边距以容纳长作品名
+            };
+            
+            Plotly.newPlot('top15-controversy', [trace], layout);
+        }
+        
+        // 评分分布对比图：高争议 vs 低争议作品（使用真实数据）
+        function createDistributionComparison() {
+            if (!processedData) return;
+            
+            // 选择投票数>5000的作品
+            const vtData = processedData.filter(item => item.total > 5000);
+            
+            if (vtData.length === 0) {
+                console.warn('没有找到投票数>5000的作品');
+                return;
+            }
+            
+            // 找出争议度最高和最低的各3部作品
+            const top3 = [...vtData]
+                .sort((a, b) => b.controversy_score - a.controversy_score)
+                .slice(0, 3);
+            const bottom3 = [...vtData]
+                .sort((a, b) => a.controversy_score - b.controversy_score)
+                .slice(0, 3);
+            
+            const targets = [...top3, ...bottom3];
+            
+            // 为每个作品添加分组标签
+            targets.forEach((item, index) => {
+                item.group = index < 3 ? '高争议度' : '低争议度（共识）';
+                item.full_title = `${item.name_cn || item.name}<br>总投票: ${item.total} | 评分: ${item.score.toFixed(2)}`;
+            });
+            
+            // 创建6个子图（2行3列）
+            const fig = {
+                data: [],
+                layout: {
+                    title: '评分分布对比：高争议度 vs 低争议度（共识）作品',
+                    grid: {
+                        rows: 2,
+                        columns: 3,
+                        pattern: 'independent'
+                    },
+                    showlegend: false,
+                    height: 400,
+                    margin: {t: 60, b: 40, l: 40, r: 40}
+                }
+            };
+            
+            // 为每个作品创建独立的子图
+            targets.forEach((item, index) => {
+                const rates = [];
+                for (let i = 1; i <= 10; i++) {
+                    rates.push(item.rates[i - 1] || 0);
+                }
+                
+                // 上面一行：高争议度（索引0-2），下面一行：低争议度（索引3-5）
+                const row = index < 3 ? 1 : 2;
+                const col = (index % 3) + 1;
+                
+                const trace = {
+                    x: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+                    y: rates,
+                    type: 'scatter',
+                    mode: 'lines',
+                    fill: 'tozeroy',
+                    name: item.full_title,
+                    line: {color: index < 3 ? '#ff7f0e' : '#1f77b4', width: 2},
+                    fillcolor: index < 3 ? 'rgba(255, 127, 14, 0.4)' : 'rgba(31, 119, 180, 0.4)',
+                    hovertemplate: `评分: %{x}<br>投票数: %{y}<br>${item.full_title}<extra></extra>`,
+                    xaxis: `x${index + 1}`,
+                    yaxis: `y${index + 1}`
+                };
+                
+                fig.data.push(trace);
+                
+                // 为每个子图设置轴属性
+                fig.layout[`xaxis${index + 1}`] = {
+                    title: '评分 (1-10)',
+                    tickmode: 'linear',
+                    tick0: 1,
+                    dtick: 1,
+                    domain: [(col - 1) * (1/3), col * (1/3) - 0.03],
+                    anchor: `y${index + 1}`
+                };
+                
+                fig.layout[`yaxis${index + 1}`] = {
+                    title: '投票数',
+                    domain: [1 - row * 0.5, 1 - (row - 1) * 0.5 - 0.05],
+                    anchor: `x${index + 1}`
+                };
+                
+                // 添加子图标题
+                fig.layout.annotations = fig.layout.annotations || [];
+                fig.layout.annotations.push({
+                    text: item.full_title,
+                    x: (col - 1) * (1/3) + 0.165,
+                    y: 1 - (row - 1) * 0.5 - 0.02,
+                    xref: 'paper',
+                    yref: 'paper',
+                    showarrow: false,
+                    font: {size: 10, weight: 'bold'},
+                    xanchor: 'center',
+                    yanchor: 'bottom'
+                });
+            });
+            
+            Plotly.newPlot('distribution-comparison', fig.data, fig.layout);
+        }
+        
+          // 厂牌效应分析：动画公司质量 vs 稳定性（使用真实数据）
+        function createStudioBubble() {
+            if (!processedData) return;
+            
+            // 作品数阈值
+            const N = 5;
+            
+            // 过滤有效数据（有公司信息、贝叶斯评分和争议度）
+            const validData = processedData.filter(item => 
+                item.company && 
+                item.company !== 'Unknown' && 
+                item.bayesian_score && 
+                item.controversy_score > 0
+            );
+            
+            // 按公司分组统计
+            const companyStats = {};
+            
+            validData.forEach(item => {
+                const company = item.company;
+                if (!companyStats[company]) {
+                    companyStats[company] = {
+                        bayesian_scores: [],
+                        controversies: [],
+                        total_votes: 0,
+                        work_count: 0
+                    };
+                }
+                companyStats[company].bayesian_scores.push(item.bayesian_score);
+                companyStats[company].controversies.push(item.controversy_score);
+                companyStats[company].total_votes += item.total;
+                companyStats[company].work_count++;
+            });
+            
+            // 转换为数组并过滤作品数阈值
+            const companyStatsArray = Object.entries(companyStats)
+                .filter(([_, stats]) => stats.work_count >= N)
+                .map(([company, stats]) => ({
+                    company,
+                    work_count: stats.work_count,
+                    mean_score: stats.bayesian_scores.reduce((sum, score) => sum + score, 0) / stats.bayesian_scores.length,
+                    entropy: stats.controversies.reduce((sum, entropy) => sum + entropy, 0) / stats.controversies.length,
+                    total_votes: stats.total_votes
+                }))
+                .sort((a, b) => b.work_count - a.work_count); // 按作品数排序
+            
+            if (companyStatsArray.length === 0) {
+                console.warn('没有找到满足条件的公司数据');
+                return;
+            }
+            
+            const trace = {
+                x: companyStatsArray.map(d => d.mean_score),
+                y: companyStatsArray.map(d => d.entropy),
+                mode: 'markers',
+                type: 'scatter',
+                text: companyStatsArray.map(d => d.company),
+                hoverinfo: 'text',
+                hovertemplate: 
+                    '<b>%{text}</b><br>' +
+                    '平均贝叶斯评分: %{x:.2f}<br>' +
+                    '平均香农熵: %{y:.2f}<br>' +
+                    '作品数量: %{customdata[0]}<br>' +
+                    '总投票数: %{customdata[1]}<br>' +
+                    '<extra></extra>',
+                customdata: companyStatsArray.map(d => [d.work_count, d.total_votes]),
+                marker: {
+                    size: companyStatsArray.map(d => Math.sqrt(d.total_votes) * 9.0), // 再次增大气泡大小3倍（总共6倍）
+                    sizemode: 'area',
+                    sizeref: Math.max(...companyStatsArray.map(d => Math.sqrt(d.total_votes))) / 20, // 调整sizeref使气泡更大6倍
+                    color: companyStatsArray.map(d => d.mean_score),
+                    colorscale: 'Viridis',
+                    showscale: true,
+                    colorbar: {
+                        title: '平均贝叶斯评分'
+                    },
+                    line: {
+                        width: 1,
+                        color: 'rgba(0,0,0,0.3)'
+                    }
+                }
+            };
+            
+            const layout = {
+                title: '厂牌效应：平均质量 vs 稳定性',
+                xaxis: {
+                    title: '平均贝叶斯评分',
+                    range: [Math.min(...companyStatsArray.map(d => d.mean_score)) - 0.2, 
+                           Math.max(...companyStatsArray.map(d => d.mean_score)) + 0.2]
+                },
+                yaxis: {
+                    title: '平均香农熵',
+                    autorange: 'reversed', // 反转Y轴（越高越稳定越好）
+                    range: [Math.max(...companyStatsArray.map(d => d.entropy)) + 0.2, 
+                           Math.min(...companyStatsArray.map(d => d.entropy)) - 0.2]
+                },
+                showlegend: false,
+                annotations: companyStatsArray.slice(0, 8).map((d, i) => ({
+                    x: d.mean_score,
+                    y: d.entropy,
+                    text: d.company,
+                    showarrow: true,
+                    arrowhead: 2,
+                    arrowsize: 1,
+                    arrowwidth: 1,
+                    ax: 20,
+                    ay: -30,
+                    font: {size: 10, color: '#333'},
+                    bgcolor: 'rgba(255,255,255,0.8)',
+                    bordercolor: 'rgba(0,0,0,0.1)',
+                    borderwidth: 1,
+                    borderpad: 2
+                }))
+            };
+            
+            Plotly.newPlot('studio-bubble', [trace], layout);
+        }
+        
+        // Unknown vs Known 公司熵值分布对比（使用真实数据）
+        function createUnknownKnownComparison() {
+            if (!processedData) return;
+            
+            // 过滤有效数据（有公司信息和争议度）
+            const validData = processedData.filter(item => 
+                item.controversy_score !== null && item.controversy_score !== undefined
+            );
+            
+            // 创建公司类型分类
+            const vizData = validData.map(item => ({
+                company: item.company,
+                controversy_score: item.controversy_score,
+                company_type: item.company === 'Unknown' ? 'Unknown' : 'Known'
+            }));
+            
+            // 按公司类型分组数据
+            const unknownData = vizData.filter(item => item.company_type === 'Unknown')
+                .map(item => item.controversy_score);
+            const knownData = vizData.filter(item => item.company_type === 'Known')
+                .map(item => item.controversy_score);
+            
+            // 创建Unknown公司的小提琴图轨迹
+            const traceUnknown = {
+                x: Array(unknownData.length).fill(0.5),  // 将Unknown放在x=0.5位置
+                y: unknownData,
+                name: 'Unknown',
+                type: 'violin',
+                box: {visible: true},
+                points: 'all',
+                meanline: {visible: true},
+                line: {color: '#ff7f0e'},
+                fillcolor: 'rgba(255, 127, 14, 0.6)'
+            };
+            
+            // 创建Known公司的小提琴图轨迹
+            const traceKnown = {
+                x: Array(knownData.length).fill(1.5),  // 将Known放在x=1.5位置
+                y: knownData,
+                name: 'Known',
+                type: 'violin',
+                box: {visible: true},
+                points: 'all',
+                meanline: {visible: true},
+                line: {color: '#1f77b4'},
+                fillcolor: 'rgba(31, 119, 180, 0.6)'
+            };
+            
+            const layout = {
+                title: '知名公司与不知名公司熵值分布对比',
+                xaxis: {
+                    title: '公司类型',
+                    tickvals: [0.5, 1.5],  // 对应新的x轴位置
+                    ticktext: ['不知名公司', '知名公司'],
+                    range: [0, 2]  // 恢复之前的x轴范围
+                },
+                yaxis: {title: '香农熵（争议指数）'},
+                violingap: 0.1,
+                violingroupgap: 0.1,
+                violinmode: 'group',
+                showlegend: false
+            };
+            
+            Plotly.newPlot('unknown-known-comparison', [traceUnknown, traceKnown], layout);
+            
+            // 添加描述文字
+            const descriptionDiv = document.getElementById('unknown-known-comparison-description');
+            if (descriptionDiv) {
+                descriptionDiv.innerHTML = '<div class="info-box" style="background: #fff0f7; border-left: 4px solid #e91e63; margin-top: 10px;">' +
+                    '<div class="info-title">数据说明</div>' +
+                    '<p>（在数据清洗中标记为unknown的公司以及作品数过少的公司这边都归类为"unknown"，用于表示不知名公司的数据）</p>' +
+                    '</div>';
+            }
+        }
+        
+        // 京都动画 vs 未知公司对比（使用真实数据）
+        function createKyotoUnknownComparison() {
+            if (!processedData) return;
+            
+            // 过滤有效数据（有公司信息和争议度）
+            const validData = processedData.filter(item => 
+                item.company && item.controversy_score > 0
+            );
+            
+            // 筛选京都动画作品
+            const kyotoData = validData
+                .filter(item => item.company.includes('京都') || item.company.includes('Kyoto'))
+                .map(item => item.controversy_score);
+            
+            // 筛选未知公司作品（公司名包含"未知"或为空）
+            const unknownData = validData
+                .filter(item => !item.company || item.company.includes('未知') || item.company === 'Unknown')
+                .map(item => item.controversy_score);
+            
+            // 如果数据量不足，使用其他公司作为对比
+            let comparisonData;
+            let comparisonLabel;
+            
+            if (unknownData.length < 10) {
+                // 使用其他知名公司作为对比
+                comparisonData = validData
+                    .filter(item => !item.company.includes('京都') && 
+                                   !item.company.includes('Kyoto') && 
+                                   item.company && 
+                                   !item.company.includes('未知') && 
+                                   item.company !== 'Unknown')
+                    .map(item => item.controversy_score)
+                    .slice(0, Math.min(100, validData.length)); // 限制数据量
+                comparisonLabel = '其他公司';
+            } else {
+                comparisonData = unknownData;
+                comparisonLabel = '未知公司';
+            }
+            
+            const trace1 = {
+                y: kyotoData,
+                name: '京都动画',
+                type: 'violin',
+                box: {visible: true},
+                meanline: {visible: true},
+                line: {color: '#1f77b4'},
+                fillcolor: 'rgba(31, 119, 180, 0.6)'
+            };
+            
+            const trace2 = {
+                y: comparisonData,
+                name: comparisonLabel,
+                type: 'violin',
+                box: {visible: true},
+                meanline: {visible: true},
+                line: {color: '#ff7f0e'},
+                fillcolor: 'rgba(255, 127, 14, 0.6)'
+            };
+            
+            const layout = {
+                title: `京都动画 vs ${comparisonLabel}争议指数对比`,
+                yaxis: {title: 'Shannon Entropy (争议指数)'},
+                xaxis: {title: '公司类型'},
+                violingap: 0,
+                violingroupgap: 0,
+                violinmode: 'overlay',
+                showlegend: true
+            };
+            
+            Plotly.newPlot('kyoto-unknown-comparison', [trace1, trace2], layout);
+        }
+        
+
+        
+        // 全局多周数据变量
+        let multiWeeksData = null;
+        
+        // 多周标签切换功能
+        function switchMultiWeekTab(tabType, event) {
+            // 隐藏所有标签内容
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // 移除所有按钮激活状态
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.classList.remove('active');
+            });
+            
+            // 显示选中的标签内容
+            document.getElementById(tabType + '-tab').classList.add('active');
+            
+            // 激活选中的按钮
+            event.target.classList.add('active');
+        }
+        
+        // 作品搜索功能初始化
+        function initAnimeSearch() {
+            const searchBtn = document.getElementById('search-anime-btn');
+            const searchInput = document.getElementById('anime-search-input');
+            const searchTypeRadios = document.querySelectorAll('input[name="search-type"]');
+            
+            if (searchBtn && searchInput) {
+                // 搜索按钮点击事件
+                searchBtn.addEventListener('click', searchAnime);
+                
+                // 输入框回车事件
+                searchInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        searchAnime();
+                    }
+                });
+                
+                // 搜索类型切换事件
+                searchTypeRadios.forEach(radio => {
+                    radio.addEventListener('change', function() {
+                        updateSearchPlaceholder();
+                        clearSearchResults();
+                    });
+                });
+                
+                // 初始化占位符
+                updateSearchPlaceholder();
+            }
+        }
+        
+        // 更新搜索输入框占位符
+        function updateSearchPlaceholder() {
+            const searchInput = document.getElementById('anime-search-input');
+            const searchType = document.querySelector('input[name="search-type"]:checked').value;
+            
+            if (searchType === 'id') {
+                searchInput.placeholder = '输入作品ID (如: 12345)';
+            } else {
+                searchInput.placeholder = '输入作品名称 (如: 进击的巨人)';
+            }
+        }
+        
+        // 清空搜索结果
+        function clearSearchResults() {
+            const resultsDiv = document.getElementById('search-results');
+            const resultsList = document.getElementById('search-results-list');
+            
+            resultsDiv.style.display = 'none';
+            resultsList.innerHTML = '';
+        }
+        
+        // 模糊搜索算法
+        function fuzzySearchAnime(searchTerm) {
+            if (!multiWeeksData || multiWeeksData.length === 0) {
+                return [];
+            }
+            
+            // 获取最新一周的所有作品数据
+            const latestWeek = multiWeeksData[multiWeeksData.length - 1];
+            const allAnime = latestWeek.data;
+            
+            // 模糊匹配函数
+            const searchTermLower = searchTerm.toLowerCase();
+            const matchedAnime = allAnime.filter(anime => {
+                const nameCn = (anime.name_cn || '').toLowerCase();
+                const name = (anime.name || '').toLowerCase();
+                
+                // 检查中文名或原名是否包含搜索词
+                return nameCn.includes(searchTermLower) || name.includes(searchTermLower);
+            });
+            
+            // 按匹配度排序（中文名匹配优先）
+            return matchedAnime.sort((a, b) => {
+                const aNameCn = (a.name_cn || '').toLowerCase();
+                const bNameCn = (b.name_cn || '').toLowerCase();
+                const aName = (a.name || '').toLowerCase();
+                const bName = (b.name || '').toLowerCase();
+                
+                // 中文名完全匹配优先
+                if (aNameCn === searchTermLower && bNameCn !== searchTermLower) return -1;
+                if (bNameCn === searchTermLower && aNameCn !== searchTermLower) return 1;
+                
+                // 原名完全匹配次优先
+                if (aName === searchTermLower && bName !== searchTermLower) return -1;
+                if (bName === searchTermLower && aName !== searchTermLower) return 1;
+                
+                // 按匹配位置排序（匹配位置越靠前越好）
+                const aCnIndex = aNameCn.indexOf(searchTermLower);
+                const bCnIndex = bNameCn.indexOf(searchTermLower);
+                const aIndex = aName.indexOf(searchTermLower);
+                const bIndex = bName.indexOf(searchTermLower);
+                
+                const aBestIndex = aCnIndex !== -1 ? aCnIndex : aIndex;
+                const bBestIndex = bCnIndex !== -1 ? bCnIndex : bIndex;
+                
+                if (aBestIndex !== -1 && bBestIndex !== -1) {
+                    return aBestIndex - bBestIndex;
+                }
+                if (aBestIndex !== -1) return -1;
+                if (bBestIndex !== -1) return 1;
+                
+                return 0;
+            });
+        }
+        
+        // 显示搜索结果列表
+        function displaySearchResults(results) {
+            const resultsDiv = document.getElementById('search-results');
+            const resultsList = document.getElementById('search-results-list');
+            
+            if (results.length === 0) {
+                resultsList.innerHTML = '<div style="text-align: center; color: #666; padding: 20px;">未找到匹配的作品</div>';
+            } else {
+                resultsList.innerHTML = results.map(anime => `
+                    <div class="search-result-item" 
+                         style="padding: 10px; border-bottom: 1px solid #eee; cursor: pointer;"
+                         onclick="selectAnimeFromSearch(${anime.subject_id})">
+                        <div style="font-weight: bold;">${anime.name_cn || anime.name}</div>
+                        <div style="font-size: 0.9em; color: #666;">
+                            作品ID: ${anime.subject_id} | 评分: ${anime.score.toFixed(2)} | 评分人数: ${anime.total}
+                        </div>
+                    </div>
+                `).join('');
+            }
+            
+            resultsDiv.style.display = 'block';
+        }
+        
+                // 从搜索结果中选择作品
+                function selectAnimeFromSearch(animeId) {
+                    const animeData = findAnimeData(animeId);
+                    
+                    if (animeData) {
+                        // 显示作品信息
+                        displayAnimeInfo(animeData);
+                        
+                        // 创建趋势可视化
+                        createAnimeTrend(animeData);
+                        
+                        // 清空搜索结果
+                        clearSearchResults();
+                        
+                        // 滚动到可视化区域
+                        document.getElementById('anime-3d-trend').scrollIntoView({ behavior: 'smooth' });
+                    }
+                }
+                
+                // 搜索作品
+                function searchAnime() {
+                    const searchInput = document.getElementById('anime-search-input');
+                    const searchTerm = searchInput.value.trim();
+                    const searchType = document.querySelector('input[name="search-type"]:checked').value;
+                    
+                    if (!searchTerm) {
+                        alert('请输入搜索内容');
+                        return;
+                    }
+                    
+                    if (!multiWeeksData || multiWeeksData.length === 0) {
+                        alert('多周数据尚未加载完成，请稍后再试');
+                        return;
+                    }
+                    
+                    if (searchType === 'id') {
+                        // ID搜索模式
+                        const animeId = parseInt(searchTerm);
+                        if (isNaN(animeId)) {
+                            alert('请输入有效的作品ID');
+                            return;
+                        }
+                        
+                        const animeData = findAnimeData(animeId);
+                        if (!animeData) {
+                            alert(`未找到ID为 ${animeId} 的作品数据`);
+                            return;
+                        }
+                        
+                        // 显示作品信息
+                        displayAnimeInfo(animeData);
+                        
+                        // 创建趋势可视化
+                        createAnimeTrend(animeData);
+                        
+                        // 清空搜索结果
+                        clearSearchResults();
+                    } else {
+                        // 名称搜索模式
+                        const results = fuzzySearchAnime(searchTerm);
+                        displaySearchResults(results);
+                    }
+                }
+        
+            // 查找作品数据
+            function findAnimeData(animeId) {
+                // 在所有周数据中查找作品
+                const animeWeeks = [];
+                
+                multiWeeksData.forEach(weekData => {
+                    const animeInWeek = weekData.data.find(anime => anime.subject_id === animeId);
+                    if (animeInWeek) {
+                        const weekInfo = {
+                            date: weekData.date,
+                            score: animeInWeek.score,
+                            total: animeInWeek.total
+                        };
+                        
+                        // 添加评分分布数据
+                        for (let i = 1; i <= 10; i++) {
+                            const rateKey = `rate_${i}`;
+                            if (animeInWeek[rateKey] !== undefined) {
+                                weekInfo[rateKey] = animeInWeek[rateKey];
+                            }
+                        }
+                        
+                        animeWeeks.push(weekInfo);
+                    }
+                });
+                
+                if (animeWeeks.length === 0) {
+                    return null;
+                }
+                
+                // 获取作品基本信息（从最新一周的数据）
+                const latestWeek = multiWeeksData[multiWeeksData.length - 1];
+                const latestAnime = latestWeek.data.find(anime => anime.subject_id === animeId);
+                
+                return {
+                    subject_id: animeId,
+                    name_cn: latestAnime?.name_cn || '',
+                    name: latestAnime?.name || '',
+                    weeks: animeWeeks
+                };
+            }
+        
+        // 显示作品信息
+        function displayAnimeInfo(animeData) {
+            const animeInfoDiv = document.getElementById('anime-info');
+            const animeDetailsDiv = document.getElementById('anime-details');
+            
+            if (!animeInfoDiv || !animeDetailsDiv) return;
+            
+            const firstWeek = animeData.weeks[0];
+            const lastWeek = animeData.weeks[animeData.weeks.length - 1];
+            const scoreChange = lastWeek.score - firstWeek.score;
+            const totalChange = lastWeek.total - firstWeek.total;
+            
+            animeDetailsDiv.innerHTML = `
+                <p><strong>作品名称:</strong> ${animeData.name_cn || animeData.name}</p>
+                <p><strong>作品ID:</strong> ${animeData.subject_id}</p>
+                <p><strong>数据周期:</strong> ${animeData.weeks.length} 周 (${firstWeek.date} - ${lastWeek.date})</p>
+                <p><strong>评分变化:</strong> ${firstWeek.score.toFixed(2)} → ${lastWeek.score.toFixed(2)} (${scoreChange > 0 ? '+' : ''}${scoreChange.toFixed(2)})</p>
+                <p><strong>评分人数变化:</strong> ${firstWeek.total} → ${lastWeek.total} (${totalChange > 0 ? '+' : ''}${totalChange})</p>
+            `;
+            
+            animeInfoDiv.style.display = 'block';
+        }
+        
+          // 创建作品趋势可视化（3D模式）
+        function createAnimeTrend(animeData) {
+            if (!animeData.weeks || animeData.weeks.length < 2) {
+                alert('该作品数据不足，无法创建趋势可视化');
+                return;
+            }
+            
+            createAnime3DTrend(animeData);
+        }
+        
+        // 创建作品3D趋势可视化（包含评分分布曲线和时间连线）
+        function createAnime3DTrend(animeData) {
+            // 准备3D数据
+            const weeks = animeData.weeks.map((week, index) => index + 1); // 周次（1, 2, 3...）
+            const scores = animeData.weeks.map(week => week.score);
+            const totals = animeData.weeks.map(week => week.total);
+            const dates = animeData.weeks.map(week => week.date);
+            
+            // 创建主评分轨迹
+            const mainTrace = {
+                x: weeks,           // X轴：时间（周次）
+                y: scores,          // Y轴：评分
+                z: totals,          // Z轴：评分人数
+                mode: 'markers+lines',
+                type: 'scatter3d',
+                name: '评分趋势',
+                marker: {
+                    size: 12,
+                    color: 'blue',
+                    opacity: 0.9
+                },
+                line: {
+                    color: 'darkblue',
+                    width: 6
+                },
+                text: dates.map((date, i) => 
+                    `周次: ${weeks[i]}<br>日期: ${date}<br>评分: ${scores[i].toFixed(2)}<br>评分人数: ${totals[i]}`
+                ),
+                hovertemplate: '%{text}<extra></extra>'
+            };
+            
+            // 创建每周的评分分布曲线轨迹
+            const weeklyDistributionTraces = [];
+            
+            for (let weekIndex = 0; weekIndex < animeData.weeks.length; weekIndex++) {
+                const week = animeData.weeks[weekIndex];
+                const weekNumber = weeks[weekIndex];
+                const date = dates[weekIndex];
+                
+                // 准备该周的评分分布数据
+                const ratingPoints = [];
+                const ratingValues = [];
+                
+                for (let rating = 1; rating <= 10; rating++) {
+                    const rateKey = `rate_${rating}`;
+                    ratingPoints.push(rating);
+                    ratingValues.push(week[rateKey] || 0);
+                }
+                
+                // 创建该周的评分分布曲线
+                weeklyDistributionTraces.push({
+                    x: Array(10).fill(weekNumber), // X轴固定为该周
+                    y: ratingPoints,               // Y轴：1-10分
+                    z: ratingValues,               // Z轴：各分数段人数
+                    mode: 'lines+markers',
+                    type: 'scatter3d',
+                    name: `第${weekNumber}周分布`,
+                    marker: {
+                        size: 6,
+                        color: `rgba(255, ${50 + weekIndex * 30}, 100, 0.8)`,
+                        symbol: 'circle'
+                    },
+                    line: {
+                        color: `rgba(255, ${50 + weekIndex * 30}, 100, 0.6)`,
+                        width: 3
+                    },
+                    text: Array(10).fill(
+                        `周次: ${weekNumber}<br>日期: ${date}<br>评分分布曲线`
+                    ),
+                    hovertemplate: '%{text}<br>评分: %{y}分<br>人数: %{z}<extra></extra>',
+                    showlegend: weekIndex === 0 // 只在图例中显示第一个
+                });
+            }
+            
+            // 创建时间维度上的连线轨迹（连接相同分数段在不同周的数据）
+            const timeConnectionTraces = [];
+            
+            // 为每个分数段创建更明显的时间连线
+            for (let rating = 1; rating <= 10; rating++) {
+                const rateKey = `rate_${rating}`;
+                const ratingValues = animeData.weeks.map(week => week[rateKey] || 0);
+                
+                // 只创建有数据的分数段的时间连线
+                if (ratingValues.some(value => value > 0)) {
+                    // 使用更明显的颜色和样式
+                    const colorHue = (rating - 1) * 36; // 每个分数段不同的色调
+                    
+                    timeConnectionTraces.push({
+                        x: weeks,                   // X轴：时间（周次）
+                        y: Array(weeks.length).fill(rating), // Y轴固定为该分数
+                        z: ratingValues,            // Z轴：该分数段人数
+                        mode: 'lines+markers',
+                        type: 'scatter3d',
+                        name: `${rating}分时间趋势`,
+                        marker: {
+                            size: 6,  // 增大标记大小
+                            color: `hsl(${colorHue}, 80%, 60%)`,
+                            symbol: 'circle',
+                            opacity: 0.8
+                        },
+                        line: {
+                            color: `hsl(${colorHue}, 80%, 60%)`,
+                            width: 4,  // 增加连线宽度
+                            opacity: 0.7  // 增加透明度
+                        },
+                        text: dates.map((date, i) => 
+                            `周次: ${weeks[i]}<br>日期: ${date}<br>评分${rating}分人数: ${ratingValues[i]}`
+                        ),
+                        hovertemplate: '%{text}<extra></extra>',
+                        showlegend: true,  // 在图例中显示，便于识别
+                        legendgroup: `rating-${rating}`
+                    });
+                }
+            }
+            
+            // 组合所有轨迹
+            const allTraces = [mainTrace, ...weeklyDistributionTraces, ...timeConnectionTraces];
+            
+            const layout = {
+                title: `${animeData.name_cn || animeData.name} - 多周趋势3D可视化（含评分分布曲线和时间连线）`,
+                scene: {
+                    xaxis: {title: '时间（周次）'},
+                    yaxis: {title: '评分（1-10）', range: [1, 10]},
+                    zaxis: {title: '人数'},
+                    camera: {
+                        eye: {x: 1.5, y: 1.5, z: 1.5}
+                    }
+                },
+                margin: {l: 0, r: 0, b: 0, t: 50},
+                showlegend: true,
+                legend: {
+                    orientation: 'h',
+                    yanchor: 'bottom',
+                    y: -0.2,
+                    xanchor: 'center',
+                    x: 0.5
+                }
+            };
+            
+            Plotly.newPlot('anime-3d-trend', allTraces, layout);
+        }
+        
+
+        
+        // 查找最新的CSV文件（支持多周分析）
+        async function findLatestCSVFiles(maxFiles = 7) {
+            try {
+                console.log(`🔍 开始查找最新的 ${maxFiles} 个CSV文件...`);
+                console.log(`⏰ 查找开始时间:`, new Date().toISOString());
+                console.log('📁 CSV文件列表:', CSV_FILE_LIST);
+                console.log(`🔧 最大文件数限制: ${maxFiles}`);
+                
+                // 使用集中的CSV文件列表
+                const csvFiles = CSV_FILE_LIST;
+                console.log(`📊 总文件数量: ${csvFiles.length} 个`);
+                
+                // 按日期排序的文件列表
+                const datedFiles = [];
+                
+                console.log(`🔄 开始遍历和解析文件日期...`);
+                for (const csvFile of csvFiles) {
+                    console.log(`📄 检查文件: ${csvFile}`);
+                    
+                    // 从文件名中提取日期（格式：bangumi_anime_YYYY-MM-DD.csv）
+                    const filename = csvFile.split('/').pop();
+                    const dateStr = filename.replace('bangumi_anime_', '').replace('.csv', '');
+                    console.log(`📝 文件名解析: ${filename} → 日期字符串: ${dateStr}`);
+                    
+                    try {
+                        // 解析日期
+                        const [year, month, day] = dateStr.split('-').map(Number);
+                        const fileDate = new Date(year, month - 1, day);
+                        
+                        console.log(`📅 文件日期解析成功: ${dateStr} → ${fileDate}`);
+                        console.log(`🔢 日期组件: 年=${year}, 月=${month}, 日=${day}`);
+                        
+                        datedFiles.push({
+                            file: csvFile,
+                            date: fileDate,
+                            dateStr: dateStr
+                        });
+                        
+                        console.log(`✅ 文件 ${csvFile} 已添加到待排序列表`);
+                    } catch (e) {
+                        console.warn(`⚠️ 跳过无效日期格式的文件: ${filename}`);
+                        console.error(`🔍 日期解析错误详情:`, e.message);
+                        continue;
+                    }
+                }
+                
+                console.log(`📊 日期解析完成，共 ${datedFiles.length} 个有效文件`);
+                
+                // 按日期降序排序
+                console.log(`🔄 开始按日期排序文件...`);
+                datedFiles.sort((a, b) => b.date - a.date);
+                console.log(`📊 排序后的文件列表:`, datedFiles.map(f => `${f.file} (${f.dateStr})`));
+                console.log(`📅 排序后的日期序列:`, datedFiles.map(f => f.dateStr));
+                
+                // 取前maxFiles个文件
+                console.log(`✂️ 取前 ${maxFiles} 个最新文件...`);
+                const latestFiles = datedFiles.slice(0, maxFiles);
+                console.log(`📋 取前 ${maxFiles} 个文件结果:`, latestFiles.map(f => `${f.file} (${f.dateStr})`));
+                
+                if (latestFiles.length === 0) {
+                    console.error('❌ 未找到有效的CSV文件');
+                    console.error(`🔍 详细分析: 共检查 ${csvFiles.length} 个文件，有效文件 ${datedFiles.length} 个`);
+                    throw new Error('未找到有效的CSV文件');
+                }
+                
+                const result = {
+                    latestFile: latestFiles[0].file, // 最新文件（向后兼容）
+                    latestDate: latestFiles[0].dateStr,
+                    allFiles: latestFiles.map(f => f.file),
+                    fileDates: latestFiles.map(f => f.dateStr)
+                };
+                
+                console.log(`✅ 多周文件查找完成: ${result.allFiles.length} 个文件`);
+                console.log(`📅 文件日期: ${result.fileDates.join(', ')}`);
+                console.log(`🏆 最新文件: ${result.latestFile} (${result.latestDate})`);
+                console.log(`⏰ 查找完成时间:`, new Date().toISOString());
+                return result;
+            } catch (error) {
+                console.error('❌ 查找CSV文件失败:', error);
+                console.error(`🔍 详细错误堆栈:`, error.stack);
+                console.error(`⏰ 错误发生时间:`, new Date().toISOString());
+                throw error;
+            }
+        }
+        
+        // 加载多周数据（与左侧数据加载保持一致）
+        async function loadMultiWeeksData(filePaths, dates) {
+            try {
+                console.log('🚀 开始加载多周数据...');
+                console.log(`📁 文件路径列表:`, filePaths);
+                console.log(`📅 文件日期列表:`, dates);
+                console.log(`🔧 当前时间戳:`, new Date().toISOString());
+                
+                multiWeeksData = [];
+                let successCount = 0;
+                let failCount = 0;
+                
+                console.log(`📊 计划加载 ${filePaths.length} 个文件`);
+                
+                for (let i = 0; i < filePaths.length; i++) {
+                    const filePath = filePaths[i];
+                    const date = dates[i];
+                    
+                    console.log(`\n📥 开始加载第${i+1}周数据: ${filePath} (${date})`);
+                    console.log(`⏰ 文件加载开始时间:`, new Date().toISOString());
+                    
+                    try {
+                        // 测试文件是否存在（与左侧保持一致）
+                        console.log(`🔍 测试文件可访问性: ${filePath}`);
+                        console.log(`📡 发送HEAD请求到: ${filePath}`);
+                        
+                        const testResponse = await fetch(filePath, { method: 'HEAD' });
+                        console.log(`📡 HEAD请求响应状态: ${testResponse.status} ${testResponse.statusText}`);
+                        
+                        if (!testResponse.ok) {
+                            console.error(`❌ 文件访问测试失败，状态码: ${testResponse.status}`);
+                            console.error(`🔍 详细错误信息:`, testResponse);
+                            throw new Error(`文件不存在或无法访问: ${filePath}, 状态码: ${testResponse.status}`);
+                        }
+                        console.log(`✅ 文件存在且可访问: ${filePath}`);
+                        
+                        console.log(`📥 开始下载CSV文件内容...`);
+                        console.log(`⏰ 下载开始时间:`, new Date().toISOString());
+                        
+                        const response = await fetch(filePath);
+                        console.log(`📡 GET请求响应状态: ${response.status} ${response.statusText}`);
+                        
+                        if (!response.ok) {
+                            console.error(`❌ HTTP错误! 状态码: ${response.status}`);
+                            console.error(`🔍 详细错误信息:`, response);
+                            throw new Error(`HTTP错误! 状态码: ${response.status}`);
+                        }
+                        
+                        const csvText = await response.text();
+                        console.log(`✅ CSV文件下载完成，内容长度: ${csvText.length} 字符`);
+                        console.log(`⏰ 下载完成时间:`, new Date().toISOString());
+                        
+                        // 检查CSV内容是否有效
+                        if (csvText.length === 0) {
+                            console.error(`❌ CSV文件内容为空: ${filePath}`);
+                            throw new Error(`CSV文件内容为空: ${filePath}`);
+                        }
+                        
+                        console.log(`🔍 开始解析CSV数据...`);
+                        console.log(`📝 CSV文件前100字符预览:`, csvText.substring(0, 100));
+                        
+                        const weeklyData = parseCSV(csvText);
+                        console.log(`✅ CSV解析完成，原始数据量: ${weeklyData.length} 条记录`);
+                        
+                        if (weeklyData.length === 0) {
+                            console.warn(`⚠️ CSV解析后数据为空，可能格式不正确: ${filePath}`);
+                        }
+                        
+                        // 处理数据，包含评分分布字段
+                        console.log(`⚙️ 开始数据处理...`);
+                        const processedWeeklyData = weeklyData.map(item => {
+                            const processedItem = {
+                                subject_id: parseInt(item.subject_id) || 0,
+                                name_cn: item.name_cn || '',
+                                name: item.name || '',
+                                score: parseFloat(item.score) || 0,
+                                total: parseInt(item.total) || 0,
+                                date: date
+                            };
+                            
+                            // 添加评分分布数据（rate_1到rate_10）
+                            for (let i = 1; i <= 10; i++) {
+                                const rateKey = `rate_${i}`;
+                                processedItem[rateKey] = parseInt(item[rateKey]) || 0;
+                            }
+                            
+                            return processedItem;
+                        }).filter(item => item.score > 0); // 过滤掉没有评分的作品
+                        
+                        console.log(`✅ 数据处理完成，有效数据量: ${processedWeeklyData.length} 条记录`);
+                        console.log(`📊 数据字段示例:`, processedWeeklyData.length > 0 ? {
+                            subject_id: processedWeeklyData[0].subject_id,
+                            name_cn: processedWeeklyData[0].name_cn,
+                            score: processedWeeklyData[0].score,
+                            total: processedWeeklyData[0].total,
+                            rate_1: processedWeeklyData[0].rate_1,
+                            rate_2: processedWeeklyData[0].rate_2,
+                            rate_3: processedWeeklyData[0].rate_3,
+                            rate_4: processedWeeklyData[0].rate_4,
+                            rate_5: processedWeeklyData[0].rate_5
+                        } : '无数据');
+                        
+                        multiWeeksData.push({
+                            date: date,
+                            data: processedWeeklyData
+                        });
+                        
+                        successCount++;
+                        console.log(`✅ 加载第${i+1}周数据成功: ${date}, ${processedWeeklyData.length} 条记录`);
+                        console.log(`⏰ 文件加载完成时间:`, new Date().toISOString());
+                    } catch (error) {
+                        console.warn(`❌ 加载文件 ${filePath} 失败:`, error);
+                        console.error(`🔍 详细错误堆栈:`, error.stack);
+                        failCount++;
+                        
+                        // 显示单个文件的错误信息（与左侧保持一致）
+                        const errorMessage = `文件加载失败: ${error.message}\n\n请确保:\n1. CSV文件存在于MyCode/bangumi_data文件夹中\n2. 文件格式正确\n3. 使用HTTP服务器访问（而非直接打开HTML文件）`;
+                        console.error(`💬 用户提示信息:`, errorMessage);
+                        alert(errorMessage);
+                    }
+                }
+                
+                console.log(`📊 多周数据加载统计: 成功 ${successCount} 个文件, 失败 ${failCount} 个文件`);
+                console.log(`⏰ 所有文件加载完成时间:`, new Date().toISOString());
+                
+                // 检查是否成功加载了任何数据
+                if (multiWeeksData.length === 0) {
+                    console.error('❌ 所有CSV文件加载失败，无法进行多周趋势分析');
+                    console.error(`🔍 失败原因分析: 共尝试加载 ${filePaths.length} 个文件，全部失败`);
+                    throw new Error('所有CSV文件加载失败，无法进行多周趋势分析');
+                }
+                
+                // 按日期排序（从旧到新）
+                console.log(`📅 开始按日期排序多周数据...`);
+                multiWeeksData.sort((a, b) => a.date.localeCompare(b.date));
+                console.log(`📅 按日期排序后的多周数据:`, multiWeeksData.map(w => w.date));
+                
+                console.log(`✅ 多周数据加载完成: ${multiWeeksData.length} 周数据`);
+                console.log(`📊 总数据量统计:`, multiWeeksData.reduce((sum, week) => sum + week.data.length, 0), '条记录');
+                
+                // 分析多周趋势
+                console.log('📈 开始分析多周趋势...');
+                console.log(`⏰ 趋势分析开始时间:`, new Date().toISOString());
+                analyzeMultiWeeksTrends();
+                
+                return true;
+                
+            } catch (error) {
+                console.error('❌ 加载多周数据失败:', error);
+                console.error(`🔍 详细错误堆栈:`, error.stack);
+                console.error(`⏰ 错误发生时间:`, new Date().toISOString());
+                
+                // 显示错误信息
+                showMultiWeeksError(error.message);
+                return false;
+            }
+        }
+        
+        // 显示多周数据加载错误
+        function showMultiWeeksError(errorMessage) {
+            // 更新排行榜区域显示错误信息
+            const rankingContainers = [
+                'score-increase-ranking',
+                'score-decrease-ranking', 
+                'voters-increase-ranking'
+            ];
+            
+            rankingContainers.forEach(containerId => {
+                const container = document.getElementById(containerId);
+                if (container) {
+                    container.innerHTML = `
+                        <div class="error-message" style="text-align: center; padding: 40px; color: #666;">
+                            <h3>❌ 多周数据加载失败</h3>
+                            <p>${errorMessage}</p>
+                            <p>请检查CSV文件是否存在且格式正确，然后刷新页面重试。</p>
+                        </div>
+                    `;
+                }
+            });
+            
+            // 更新3D可视化区域显示错误信息
+            const trendContainer = document.getElementById('anime-3d-trend');
+            if (trendContainer) {
+                trendContainer.innerHTML = `
+                    <div class="error-message" style="text-align: center; padding: 40px; color: #666;">
+                        <h3>❌ 无法进行3D可视化</h3>
+                        <p>${errorMessage}</p>
+                        <p>请先确保多周数据加载成功。</p>
+                    </div>
+                `;
+            }
+            
+            // 更新统计信息
+            document.getElementById('multi-weeks-count').textContent = '0';
+            document.getElementById('multi-total-anime').textContent = '0';
+            document.getElementById('multi-changing-anime').textContent = '0';
+        }
+        
+        // 分析多周趋势
+        function analyzeMultiWeeksTrends() {
+            if (!multiWeeksData || multiWeeksData.length < 2) {
+                console.warn('多周数据不足，无法进行趋势分析');
+                showMultiWeeksError('多周数据不足（至少需要2周数据才能进行趋势分析）');
+                return;
+            }
+            
+            console.log('开始分析多周趋势...');
+            
+            // 创建作品变化追踪
+            const animeChanges = {};
+            
+            // 遍历所有周数据，追踪每个作品的变化
+            multiWeeksData.forEach((weekData, weekIndex) => {
+                weekData.data.forEach(anime => {
+                    const animeId = anime.subject_id;
+                    
+                    if (!animeChanges[animeId]) {
+                        animeChanges[animeId] = {
+                            name_cn: anime.name_cn,
+                            name: anime.name,
+                            scores: [],
+                            totals: [],
+                            weeks: []
+                        };
+                    }
+                    
+                    animeChanges[animeId].scores.push(anime.score);
+                    animeChanges[animeId].totals.push(anime.total);
+                    animeChanges[animeId].weeks.push(weekData.date);
+                });
+            });
+            
+            // 计算变化率
+            const changeAnalysis = Object.values(animeChanges)
+                .filter(anime => anime.scores.length >= 2) // 至少有两周数据
+                .map(anime => {
+                    const firstScore = anime.scores[0];
+                    const lastScore = anime.scores[anime.scores.length - 1];
+                    const firstTotal = anime.totals[0];
+                    const lastTotal = anime.totals[anime.totals.length - 1];
+                    
+                    const scoreChangeRate = ((lastScore - firstScore) / firstScore) * 100;
+                    const totalChangeRate = ((lastTotal - firstTotal) / firstTotal) * 100;
+                    
+                    return {
+                        ...anime,
+                        scoreChangeRate: scoreChangeRate,
+                        totalChangeRate: totalChangeRate,
+                        firstScore: firstScore,
+                        lastScore: lastScore,
+                        firstTotal: firstTotal,
+                        lastTotal: lastTotal
+                    };
+                });
+            
+            // 创建排行榜数据
+            const scoreIncreaseRanking = [...changeAnalysis]
+                .filter(anime => anime.scoreChangeRate > 0)
+                .sort((a, b) => b.scoreChangeRate - a.scoreChangeRate)
+                .slice(0, 15);
+                
+            const scoreDecreaseRanking = [...changeAnalysis]
+                .filter(anime => anime.scoreChangeRate < 0)
+                .sort((a, b) => a.scoreChangeRate - b.scoreChangeRate)
+                .slice(0, 15);
+                
+            const votersIncreaseRanking = [...changeAnalysis]
+                .filter(anime => anime.totalChangeRate > 0)
+                .sort((a, b) => b.totalChangeRate - a.totalChangeRate)
+                .slice(0, 15);
+            
+            // 创建排行榜图表
+            createScoreIncreaseRanking(scoreIncreaseRanking);
+            createScoreDecreaseRanking(scoreDecreaseRanking);
+            createVotersIncreaseRanking(votersIncreaseRanking);
+            
+            // 更新统计信息
+            updateMultiWeeksStatistics(changeAnalysis);
+            
+            console.log('多周趋势分析完成');
+        }
+        
+        // 创建评分增长率榜
+        function createScoreIncreaseRanking(ranking) {
+            const animeNames = ranking.map(d => d.name_cn || d.name);
+            const changeRates = ranking.map(d => d.scoreChangeRate);
+            const firstScores = ranking.map(d => d.firstScore);
+            const lastScores = ranking.map(d => d.lastScore);
+            
+            const trace = {
+                x: changeRates,
+                y: animeNames,
+                type: 'bar',
+                orientation: 'h',
+                text: ranking.map(d => `从 ${d.firstScore.toFixed(2)} 到 ${d.lastScore.toFixed(2)}`),
+                textposition: 'auto',
+                marker: {
+                    color: changeRates,
+                    colorscale: 'Greens',
+                    showscale: true,
+                    colorbar: {
+                        title: '增长率%'
+                    }
+                }
+            };
+            
+            const layout = {
+                title: '评分增长率排行榜',
+                xaxis: {title: '评分增长率 (%)'},
+                yaxis: {title: '作品名称', autorange: 'reversed'},
+                margin: {l: 200}
+            };
+            
+            Plotly.newPlot('score-increase-ranking', [trace], layout);
+        }
+        
+        // 创建评分下降率榜
+        function createScoreDecreaseRanking(ranking) {
+            const animeNames = ranking.map(d => d.name_cn || d.name);
+            const changeRates = ranking.map(d => Math.abs(d.scoreChangeRate)); // 取绝对值显示下降幅度
+            const firstScores = ranking.map(d => d.firstScore);
+            const lastScores = ranking.map(d => d.lastScore);
+            
+            const trace = {
+                x: changeRates,
+                y: animeNames,
+                type: 'bar',
+                orientation: 'h',
+                text: ranking.map(d => `从 ${d.firstScore.toFixed(2)} 到 ${d.lastScore.toFixed(2)}`),
+                textposition: 'auto',
+                marker: {
+                    color: changeRates,
+                    colorscale: 'Reds',
+                    showscale: true,
+                    colorbar: {
+                        title: '下降幅度%'
+                    }
+                }
+            };
+            
+            const layout = {
+                title: '评分下降率排行榜',
+                xaxis: {title: '评分下降幅度 (%)'},
+                yaxis: {title: '作品名称', autorange: 'reversed'},
+                margin: {l: 200}
+            };
+            
+            Plotly.newPlot('score-decrease-ranking', [trace], layout);
+        }
+        
+        // 创建评分人数增长榜
+        function createVotersIncreaseRanking(ranking) {
+            const animeNames = ranking.map(d => d.name_cn || d.name);
+            const changeRates = ranking.map(d => d.totalChangeRate);
+            const firstTotals = ranking.map(d => d.firstTotal);
+            const lastTotals = ranking.map(d => d.lastTotal);
+            
+            const trace = {
+                x: changeRates,
+                y: animeNames,
+                type: 'bar',
+                orientation: 'h',
+                text: ranking.map(d => `从 ${d.firstTotal} 到 ${d.lastTotal} 人`),
+                textposition: 'auto',
+                marker: {
+                    color: changeRates,
+                    colorscale: 'Blues',
+                    showscale: true,
+                    colorbar: {
+                        title: '增长率%'
+                    }
+                }
+            };
+            
+            const layout = {
+                title: '评分人数增长排行榜',
+                xaxis: {title: '评分人数增长率 (%)'},
+                yaxis: {title: '作品名称', autorange: 'reversed'},
+                margin: {l: 200}
+            };
+            
+            Plotly.newPlot('voters-increase-ranking', [trace], layout);
+        }
+        
+        // 更新多周统计信息
+        function updateMultiWeeksStatistics(changeAnalysis) {
+            console.log('📊 开始更新多周统计信息...');
+            console.log(`📈 多周数据长度: ${multiWeeksData ? multiWeeksData.length : 'null'}`);
+            console.log(`🎬 变化分析数据长度: ${changeAnalysis.length}`);
+            
+            const totalAnime = changeAnalysis.length;
+            const increasingAnime = changeAnalysis.filter(anime => anime.scoreChangeRate > 0).length;
+            const decreasingAnime = changeAnalysis.filter(anime => anime.scoreChangeRate < 0).length;
+            const stableAnime = changeAnalysis.filter(anime => Math.abs(anime.scoreChangeRate) < 1).length;
+            
+            console.log(`📊 统计信息:`);
+            console.log(`  - 总作品数: ${totalAnime}`);
+            console.log(`  - 评分增长作品数: ${increasingAnime}`);
+            console.log(`  - 评分下降作品数: ${decreasingAnime}`);
+            console.log(`  - 稳定作品数: ${stableAnime}`);
+            console.log(`  - 分析周数: ${multiWeeksData ? multiWeeksData.length : 'null'}`);
+            
+            document.getElementById('multi-weeks-count').textContent = multiWeeksData.length;
+            document.getElementById('multi-total-anime').textContent = totalAnime.toLocaleString();
+            document.getElementById('multi-changing-anime').textContent = (increasingAnime + decreasingAnime).toLocaleString();
+            
+            console.log(`✅ 多周统计信息更新完成:`);
+            console.log(`  - 分析周数: ${multiWeeksData.length}`);
+            console.log(`  - 总作品数: ${totalAnime.toLocaleString()}`);
+            console.log(`  - 评分变化作品数: ${(increasingAnime + decreasingAnime).toLocaleString()}`);
+        }
+        
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', async function() {
+            console.log('🚀 页面开始加载...');
+            
+            initDashboardInteractions();
+            initAnimeSearch();
+            
+            // 显示加载状态
+            console.log('📝 设置加载状态...');
+            document.querySelectorAll('.loading').forEach(el => {
+                console.log(`📋 设置加载状态元素: ${el.textContent}`);
+                el.textContent = '正在加载数据...';
+            });
+            
+            // 加载数据
+            console.log('📥 开始加载单周数据...');
+            const success = await loadBangumiData();
+            
+            if (success) {
+                console.log('✅ 单周数据加载成功');
+                
+                // 更新统计信息
+                console.log('📊 更新统计信息...');
+                updateStatistics();
+                
+                // 创建图表
+                console.log('📈 创建深度分析图表...');
+                createDeepAnalysisCharts();
+                console.log('📈 多周数据加载完成，开始分析...');
+                
+                // 加载多周数据
+                console.log('📥 开始加载多周数据...');
+                const csvFiles = await findLatestCSVFiles(7);
+                const multiWeeksSuccess = await loadMultiWeeksData(csvFiles.allFiles, csvFiles.fileDates);
+                
+                // 如果多周数据加载失败，手动更新统计信息
+                if (!multiWeeksSuccess) {
+                    console.log('⚠️ 多周数据加载失败，手动更新统计信息');
+                    document.getElementById('multi-weeks-count').textContent = '0';
+                    document.getElementById('multi-total-anime').textContent = '0';
+                    document.getElementById('multi-changing-anime').textContent = '0';
+                } else {
+                    console.log('✅ 多周数据加载成功');
+                }
+                
+                // 隐藏加载状态
+                console.log('✅ 数据加载完成，隐藏加载状态');
+                document.querySelectorAll('.loading').forEach(el => {
+                    el.style.display = 'none';
+                });
+                
+                console.log('🎉 页面加载完成！');
+            } else {
+                console.error('❌ 单周数据加载失败');
+                document.querySelectorAll('.loading').forEach(el => {
+                    el.textContent = '数据加载失败，请刷新页面重试';
+                    el.style.color = 'red';
+                    el.style.fontWeight = 'bold';
+                });
+            }
+        });
+        
+        // 更新统计信息
+        function updateStatistics() {
+            if (!processedData) return;
+            
+            // 更新总作品数
+            document.getElementById('multi-total-anime').textContent = processedData.length.toLocaleString();
+            
+            // 注意：分析周数由updateMultiWeeksStatistics函数单独更新
+            // 这里不更新multi-weeks-count，避免显示错误的周数
+        }
+        
+        // 计算Spearman相关系数
+        function calculateSpearman(x, y) {
+            if (x.length !== y.length) return { rho: 0, p: 1 };
+            
+            // 创建排名
+            const rankX = getRanks(x);
+            const rankY = getRanks(y);
+            
+            // 计算差异
+            const n = x.length;
+            let sumD2 = 0;
+            for (let i = 0; i < n; i++) {
+                const d = rankX[i] - rankY[i];
+                sumD2 += d * d;
+            }
+            
+            // 计算Spearman相关系数
+            const rho = 1 - (6 * sumD2) / (n * (n * n - 1));
+            
+            // 简化p值计算（实际应用中应该使用更精确的方法）
+            const t = rho * Math.sqrt((n - 2) / (1 - rho * rho));
+            const p = 2 * (1 - studentTCDF(Math.abs(t), n - 2));
+            
+            return { rho, p };
+        }
+        
+        // 获取排名
+        function getRanks(arr) {
+            const sorted = [...arr].sort((a, b) => a - b);
+            const ranks = arr.map(value => sorted.indexOf(value) + 1);
+            
+            // 处理并列排名
+            const uniqueValues = [...new Set(arr)].sort((a, b) => a - b);
+            for (const value of uniqueValues) {
+                const indices = arr.map((v, i) => v === value ? i : -1).filter(i => i !== -1);
+                if (indices.length > 1) {
+                    const avgRank = indices.reduce((sum, i) => sum + ranks[i], 0) / indices.length;
+                    indices.forEach(i => ranks[i] = avgRank);
+                }
+            }
+            
+            return ranks;
+        }
+        
+        // 学生t分布累积分布函数（简化版）
+        function studentTCDF(t, df) {
+            // 简化实现，实际应用中应该使用更精确的方法
+            if (df <= 0) return 0.5;
+            if (t === 0) return 0.5;
+            
+            const x = df / (df + t * t);
+            const a = df / 2;
+            const b = 0.5;
+            
+            // 使用不完全Beta函数近似
+            let term = 1;
+            let sum = 1;
+            for (let k = 1; k <= 100; k++) {
+                term *= x * (a + k - 1) / k;
+                sum += term;
+                if (Math.abs(term) < 1e-10) break;
+            }
+            
+            const beta = Math.exp(a * Math.log(x) + b * Math.log(1 - x)) * sum / a;
+            const cdf = 0.5 + (t > 0 ? 0.5 : -0.5) * beta;
+            
+            return Math.max(0, Math.min(1, cdf));
+        }
+
+        // 目录交互功能
+        function initTOCInteractions() {
+            // 展开/折叠功能
+            const expandableItems = document.querySelectorAll('.toc-expandable');
+            expandableItems.forEach(item => {
+                item.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    const submenu = this.nextElementSibling;
+                    if (submenu && submenu.classList.contains('toc-submenu')) {
+                        const isExpanded = submenu.classList.contains('expanded');
+                        
+                        // 关闭所有其他展开的子菜单
+                        document.querySelectorAll('.toc-submenu.expanded').forEach(menu => {
+                            if (menu !== submenu) {
+                                menu.classList.remove('expanded');
+                                menu.previousElementSibling.classList.remove('expanded');
+                            }
+                        });
+                        
+                        // 切换当前子菜单
+                        if (isExpanded) {
+                            submenu.classList.remove('expanded');
+                            this.classList.remove('expanded');
+                        } else {
+                            submenu.classList.add('expanded');
+                            this.classList.add('expanded');
+                        }
+                    }
+                });
+            });
+
+            // 平滑滚动功能
+            const tocLinks = document.querySelectorAll('.toc-link, .toc-sublink');
+            tocLinks.forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    
+                    const targetId = this.getAttribute('href').substring(1);
+                    const targetElement = document.getElementById(targetId);
+                    
+                    if (targetElement) {
+                        // 移除所有激活状态
+                        tocLinks.forEach(l => l.classList.remove('active'));
+                        
+                        // 添加当前激活状态
+                        this.classList.add('active');
+                        
+                        // 平滑滚动到目标位置
+                        targetElement.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'start'
+                        });
+                        
+                        // 如果点击的是子菜单项，确保父菜单是展开状态
+                        if (this.classList.contains('toc-sublink')) {
+                            const parentItem = this.closest('.toc-item');
+                            const expandable = parentItem.querySelector('.toc-expandable');
+                            const submenu = parentItem.querySelector('.toc-submenu');
+                            
+                            if (expandable && submenu && !submenu.classList.contains('expanded')) {
+                                submenu.classList.add('expanded');
+                                expandable.classList.add('expanded');
+                            }
+                        }
+                    }
+                });
+            });
+
+            // 滚动时高亮当前章节
+            function highlightCurrentSection() {
+                const sections = document.querySelectorAll('[id]');
+                const scrollPosition = window.scrollY + 100; // 偏移量
+                
+                let currentSection = '';
+                
+                sections.forEach(section => {
+                    const sectionTop = section.offsetTop;
+                    const sectionHeight = section.offsetHeight;
+                    
+                    if (scrollPosition >= sectionTop && scrollPosition < sectionTop + sectionHeight) {
+                        currentSection = section.id;
+                    }
+                });
+                
+                // 移除所有激活状态
+                tocLinks.forEach(link => link.classList.remove('active'));
+                
+                // 高亮当前章节对应的目录项
+                if (currentSection) {
+                    const activeLink = document.querySelector(`.toc-link[href="#${currentSection}"], .toc-sublink[href="#${currentSection}"]`);
+                    if (activeLink) {
+                        activeLink.classList.add('active');
+                        
+                        // 如果激活的是子菜单项，确保父菜单是展开状态
+                        if (activeLink.classList.contains('toc-sublink')) {
+                            const parentItem = activeLink.closest('.toc-item');
+                            const expandable = parentItem.querySelector('.toc-expandable');
+                            const submenu = parentItem.querySelector('.toc-submenu');
+                            
+                            if (expandable && submenu && !submenu.classList.contains('expanded')) {
+                                submenu.classList.add('expanded');
+                                expandable.classList.add('expanded');
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 监听滚动事件
+            window.addEventListener('scroll', highlightCurrentSection);
+            
+            // 初始高亮
+            highlightCurrentSection();
+        }
+
+        // 初始化目录交互
+        document.addEventListener('DOMContentLoaded', function() {
+            initTOCInteractions();
+            initBackToTopButton();
+        });
+
+        // 返回顶部按钮功能
+        function initBackToTopButton() {
+            const backToTopBtn = document.getElementById('back-to-top');
+            
+            // 监听滚动事件
+            window.addEventListener('scroll', function() {
+                if (window.pageYOffset > 300) {
+                    backToTopBtn.classList.add('show');
+                } else {
+                    backToTopBtn.classList.remove('show');
+                }
+            });
+            
+            // 点击返回顶部
+            backToTopBtn.addEventListener('click', function() {
+                window.scrollTo({
+                    top: 0,
+                    behavior: 'smooth'
+                });
+            });
+        }
+    </script>
+</body>
+</html>
